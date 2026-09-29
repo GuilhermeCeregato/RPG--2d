@@ -1,0 +1,18 @@
+{
+  "name": "rpg-2d",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^4.2.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "typescript": "^5.6.0"
+  }
+}
