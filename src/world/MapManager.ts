@@ -30,6 +30,7 @@ export class MapManager {
     this.createOuterWalls();
     this.createObstacles();
     this.createDecoration();
+    this.createGuild();
   }
 
   // ========================================
@@ -220,8 +221,8 @@ export class MapManager {
     this.createTree(56, 27);
 
     // Árvores centrais
-    this.createTree(21, 7);
-    this.createTree(24, 7);
+    // Removidas daqui porque a Guilda ocupa
+    // essa região.
 
     this.createTree(36, 21);
     this.createTree(39, 23);
@@ -246,6 +247,375 @@ export class MapManager {
       14,
       7,
       4
+    );
+  }
+
+  // ========================================
+  // GUILDA DOS AVENTUREIROS
+  // ========================================
+
+  private createGuild(): void {
+    /*
+      Estrutura da Guilda:
+
+          COLUNAS 18 → 26
+
+             GUILDA
+        ┌─────────────────┐
+        │                 │
+        │  mesa     mesa  │
+        │                 │
+        │      BALCÃO     │
+        │                 │
+        └───────  ────────┘
+                ↑
+              ENTRADA
+    */
+
+    const startCol = 18;
+    const startRow = 3;
+    const width = 9;
+    const height = 7;
+
+    // ========================================
+    // PISO DA GUILDA
+    // ========================================
+
+    for (
+      let row = startRow;
+      row < startRow + height;
+      row++
+    ) {
+      for (
+        let col = startCol;
+        col < startCol + width;
+        col++
+      ) {
+        const x =
+          col * TILE_SIZE +
+          TILE_SIZE / 2;
+
+        const y =
+          row * TILE_SIZE +
+          TILE_SIZE / 2;
+
+        this.scene.add
+          .rectangle(
+            x,
+            y,
+            TILE_SIZE,
+            TILE_SIZE,
+            0x8a6748
+          )
+          .setStrokeStyle(
+            1,
+            0x65482f
+          );
+      }
+    }
+
+    // ========================================
+    // PAREDES DA GUILDA
+    // ========================================
+
+    const wallColor = 0x4a3526;
+
+    // Parede superior
+    for (
+      let col = startCol;
+      col < startCol + width;
+      col++
+    ) {
+      this.createGuildWall(
+        col,
+        startRow,
+        wallColor
+      );
+    }
+
+    // Parede esquerda
+    for (
+      let row = startRow + 1;
+      row < startRow + height;
+      row++
+    ) {
+      this.createGuildWall(
+        startCol,
+        row,
+        wallColor
+      );
+    }
+
+    // Parede direita
+    for (
+      let row = startRow + 1;
+      row < startRow + height;
+      row++
+    ) {
+      this.createGuildWall(
+        startCol + width - 1,
+        row,
+        wallColor
+      );
+    }
+
+    // ========================================
+    // PAREDE INFERIOR COM ENTRADA
+    // ========================================
+
+    const doorCol =
+      startCol + Math.floor(width / 2);
+
+    for (
+      let col = startCol;
+      col < startCol + width;
+      col++
+    ) {
+      // Não cria parede na posição da porta.
+      if (col === doorCol) {
+        continue;
+      }
+
+      this.createGuildWall(
+        col,
+        startRow + height - 1,
+        wallColor
+      );
+    }
+
+    // ========================================
+    // PORTA
+    // ========================================
+
+    const doorX =
+      doorCol * TILE_SIZE +
+      TILE_SIZE / 2;
+
+    const doorY =
+      (startRow + height - 1) *
+        TILE_SIZE +
+      TILE_SIZE / 2;
+
+    this.scene.add.rectangle(
+      doorX,
+      doorY,
+      20,
+      28,
+      0x5b3924
+    );
+
+    this.scene.add.rectangle(
+      doorX,
+      doorY,
+      14,
+      24,
+      0x70451f
+    );
+
+    this.scene.add.circle(
+      doorX + 4,
+      doorY,
+      2,
+      0xd6b45c
+    );
+
+    // ========================================
+    // PLACA DA GUILDA
+    // ========================================
+
+    const signX =
+      doorX;
+
+    const signY =
+      (startRow - 1) *
+        TILE_SIZE +
+      TILE_SIZE / 2;
+
+    this.scene.add.rectangle(
+      signX,
+      signY,
+      150,
+      30,
+      0x4b2e1c
+    );
+
+    this.scene.add.text(
+      signX,
+      signY,
+      "GUILDA DOS AVENTUREIROS",
+      {
+        fontSize: "11px",
+        color: "#f5d98a",
+        fontStyle: "bold",
+      }
+    )
+      .setOrigin(0.5)
+      .setDepth(10);
+
+    // ========================================
+    // BALCÃO
+    // ========================================
+
+    const counterX =
+      22 * TILE_SIZE +
+      TILE_SIZE / 2;
+
+    const counterY =
+      5 * TILE_SIZE +
+      TILE_SIZE / 2;
+
+    this.scene.add.rectangle(
+      counterX,
+      counterY,
+      150,
+      25,
+      0x51351f
+    );
+
+    this.scene.add.rectangle(
+      counterX,
+      counterY - 4,
+      150,
+      7,
+      0x8b5e34
+    );
+
+    // ========================================
+    // MESAS
+    // ========================================
+
+    this.createGuildTable(
+      20,
+      7
+    );
+
+    this.createGuildTable(
+      24,
+      7
+    );
+
+    // ========================================
+    // QUADRO DE MISSÕES
+    // ========================================
+
+    const boardX =
+      19 * TILE_SIZE +
+      TILE_SIZE / 2;
+
+    const boardY =
+      4 * TILE_SIZE +
+      TILE_SIZE / 2;
+
+    this.scene.add.rectangle(
+      boardX,
+      boardY,
+      34,
+      42,
+      0x53351f
+    );
+
+    this.scene.add.rectangle(
+      boardX,
+      boardY,
+      27,
+      35,
+      0x9b7044
+    );
+
+    this.scene.add.text(
+      boardX,
+      boardY,
+      "MISSÕES",
+      {
+        fontSize: "7px",
+        color: "#fff0bd",
+        fontStyle: "bold",
+      }
+    )
+      .setOrigin(0.5)
+      .setDepth(10);
+  }
+
+  // ========================================
+  // PAREDE DA GUILDA
+  // ========================================
+
+  private createGuildWall(
+    col: number,
+    row: number,
+    color: number
+  ): void {
+    const x =
+      col * TILE_SIZE +
+      TILE_SIZE / 2;
+
+    const y =
+      row * TILE_SIZE +
+      TILE_SIZE / 2;
+
+    const wall =
+      this.scene.add.rectangle(
+        x,
+        y,
+        TILE_SIZE,
+        TILE_SIZE,
+        color
+      );
+
+    this.scene.physics.add.existing(
+      wall,
+      true
+    );
+
+    this.walls.add(wall);
+  }
+
+  // ========================================
+  // MESA DA GUILDA
+  // ========================================
+
+  private createGuildTable(
+    col: number,
+    row: number
+  ): void {
+    const x =
+      col * TILE_SIZE +
+      TILE_SIZE / 2;
+
+    const y =
+      row * TILE_SIZE +
+      TILE_SIZE / 2;
+
+    this.scene.add.ellipse(
+      x,
+      y + 7,
+      38,
+      12,
+      0x3c2718,
+      0.5
+    );
+
+    this.scene.add.rectangle(
+      x,
+      y,
+      34,
+      22,
+      0x70451f
+    );
+
+    this.scene.add.rectangle(
+      x,
+      y - 4,
+      38,
+      17,
+      0x986332
+    );
+
+    this.createDecorationCollision(
+      x,
+      y,
+      34,
+      22
     );
   }
 

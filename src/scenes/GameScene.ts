@@ -1,56 +1,52 @@
 import Phaser from "phaser";
-import { SCENE_KEYS } from "../utils/constants";
-import { MapManager } from "../world/MapManager";
 import { Player } from "../entities/Player";
-import { NPC } from "../entities/NPC";
 import { Enemy } from "../entities/Enemy";
-import { InteractionSystem } from "../systems/InteractionSystem";
-import { DialogueSystem } from "../systems/DialogueSystem";
-import { ExperienceSystem } from "../systems/Experience";
-import { InventorySystem } from "../systems/Inventory";
-import { Item } from "../items/Item";
+import { NPC } from "../entities/NPC";
+import { Weapon } from "../items/Weapon";
 import { ItemDrop } from "../items/ItemDrop";
+import { ExperienceSystem } from "../systems/Experience";
+import { DialogueSystem } from "../systems/DialogueSystem";
+import { InteractionSystem } from "../systems/InteractionSystem";
+import { InventorySystem } from "../systems/Inventory";
+import type { Item } from "../items/Item";
+import {
+  CHARACTER_CLASSES,
+  CharacterClassId,
+} from "../entities/CharacterClass";
+import { MapManager } from "../world/MapManager";
+import { SCENE_KEYS } from "../utils/constants";
 
 export class GameScene extends Phaser.Scene {
-  private mapManager!: MapManager;
   private player!: Player;
+  private mapManager!: MapManager;
 
-  private npcs: NPC[] = [];
   private enemies: Enemy[] = [];
-  private itemDrops: ItemDrop[] = [];
+  private npcs: NPC[] = [];
 
-  private interactionSystem!: InteractionSystem;
-  private dialogueSystem!: DialogueSystem;
   private experienceSystem!: ExperienceSystem;
+  private dialogueSystem!: DialogueSystem;
+  private interactionSystem!: InteractionSystem;
   private inventorySystem!: InventorySystem;
 
+  private combatText!: Phaser.GameObjects.Text;
+  private combatTimer = 0;
+
+  private healthBar!: Phaser.GameObjects.Rectangle;
+  private healthBarBackground!: Phaser.GameObjects.Rectangle;
+
+  private staminaBar!: Phaser.GameObjects.Rectangle;
+  private staminaBarBackground!: Phaser.GameObjects.Rectangle;
+
   private levelText!: Phaser.GameObjects.Text;
-  private experienceText!: Phaser.GameObjects.Text;
-  private experienceBarBackground!: Phaser.GameObjects.Rectangle;
-  private experienceBar!: Phaser.GameObjects.Rectangle;
-  private levelUpText!: Phaser.GameObjects.Text;
+  private xpText!: Phaser.GameObjects.Text;
 
-  private attackCooldown = 350;
-  private canAttack = true;
-  private attackDamage = 25;
-  private attackRange = 55;
-
-  private enemyRespawnDelay = 3000;
+  private sword!: Weapon;
 
   constructor() {
-    super({
-      key: SCENE_KEYS.GAME,
-    });
+    super(SCENE_KEYS.GAME);
   }
 
   create(): void {
-    console.log(
-      "Textura slime_gel existe:",
-      this.textures.exists(
-        "slime_gel"
-      )
-    );
-
     this.mapManager =
       new MapManager(this);
 
@@ -63,6 +59,60 @@ export class GameScene extends Phaser.Scene {
       this.mapManager.heightInPixels
     );
 
+    // ========================================
+    // PLAYER
+    // ========================================
+
+    // Player começa abaixo da Guilda,
+    // longe do slime.
+    this.player = new Player(
+      this,
+      720,
+      400
+    );
+
+    this.player.setCollideWorldBounds(
+      true
+    );
+
+    // ========================================
+    // ARMA INICIAL
+    // ========================================
+
+    this.sword = new Weapon({
+      id: "iron_sword",
+      name: "Espada de Ferro",
+      type: "weapon",
+      description:
+        "Uma espada simples de ferro.",
+      attack: 15,
+      rarity: "common",
+    });
+
+    this.player.equipWeapon(
+      this.sword
+    );
+
+    // ========================================
+    // COLISÃO PLAYER / MAPA
+    // ========================================
+
+    this.physics.add.collider(
+      this.player,
+      this.mapManager.walls
+    );
+
+    // ========================================
+    // CÂMERA
+    // ========================================
+
+    this.cameras.main.startFollow(
+      this.player,
+      true,
+      0.08,
+      0.08
+    );
+
     this.cameras.main.setBounds(
       0,
       0,
@@ -70,80 +120,128 @@ export class GameScene extends Phaser.Scene {
       this.mapManager.heightInPixels
     );
 
-    this.player =
-      new Player(
-        this,
-        this.mapManager.widthInPixels / 2,
-        this.mapManager.heightInPixels / 2
-      );
+    // ========================================
+    // EXPERIÊNCIA
+    // ========================================
 
-    this.physics.add.collider(
-      this.player,
-      this.mapManager.walls
-    );
-
-    this.cameras.main.startFollow(
-      this.player,
-      true
-    );
-
-    this.createHUD();
-
+    // O ExperienceSystem recebe os callbacks
+    // pelo construtor (onExperienceChange, onLevelUp).
     this.experienceSystem =
       new ExperienceSystem(
-        (
-          experience: number,
-          experienceToNextLevel: number,
-          level: number
-        ) => {
-          this.updateExperienceHUD(
-            experience,
-            experienceToNextLevel,
-            level
-          );
-        },
-
-        (level: number) => {
+        undefined,
+        (level) => {
           this.player.levelUp(
             level
           );
 
-          this.showLevelUp(
+          this.showLevelUpMessage(
             level
           );
         }
       );
 
-    this.updateExperienceHUD(
-      this.experienceSystem.getExperience(),
-      this.experienceSystem.getExperienceToNextLevel(),
-      this.experienceSystem.getLevel()
-    );
+    // ========================================
+    // HUD
+    // ========================================
 
-    // NPC
+    this.createHUD();
+
+    // ========================================
+    // DIÁLOGO
+    // ========================================
+
+    this.dialogueSystem =
+      new DialogueSystem(this);
+
+    // ========================================
+    // NPC AVENTUREIRO
+    // ========================================
+
+    // O Aventureiro fica em outra região
+    // do mapa, longe da Guilda.
     const npc =
       new NPC(
         this,
-        160,
-        160,
+        1152,
+        592,
         "Aventureiro",
         [
-          "Olá! Este é o começo da sua aventura.",
-          "Existem criaturas perigosas na floresta.",
-          "Tome cuidado e fique de olho nos seus equipamentos.",
+          {
+            text:
+              "Olá! Este é o começo da sua aventura.",
+            nextNode: "node_1",
+          },
+
+          {
+            text:
+              "Existem criaturas perigosas na floresta.",
+            nextNode: "node_2",
+          },
+
+          {
+            text:
+              "Tome cuidado e fique de olho nos seus equipamentos.",
+          },
         ]
       );
 
     this.npcs.push(npc);
 
-    // Slime inicial
-    this.spawnSlime(
-      480,
-      320
+    // ========================================
+    // NPC DA GUILDA
+    // ========================================
+
+    // O Mestre da Guilda fica dentro da
+    // estrutura física da Guilda.
+    const guildNPC =
+      new NPC(
+        this,
+        720,
+        208,
+        "Mestre da Guilda",
+        [
+          {
+            text:
+              "Bem-vindo à Guilda dos Aventureiros. Antes de começar sua jornada, você precisa escolher uma classe.",
+            nextNode: "node_1",
+          },
+
+          {
+            text:
+              "Escolha com cuidado. Sua classe definirá seus atributos iniciais.",
+            classSelection: true,
+            action: () => {
+              const availableClasses =
+                CHARACTER_CLASSES.filter(
+                  (characterClass) =>
+                    !characterClass.secret
+                );
+
+              this.dialogueSystem.showClassOptions(
+                availableClasses.map(
+                  (characterClass) => ({
+                    id: characterClass.id,
+                    name: characterClass.name,
+                  })
+                ),
+                (classId) => {
+                  this.selectPlayerClass(
+                    classId
+                  );
+                }
+              );
+            },
+          },
+        ]
+      );
+
+    this.npcs.push(
+      guildNPC
     );
 
-    this.dialogueSystem =
-      new DialogueSystem(this);
+    // ========================================
+    // SISTEMA DE INTERAÇÃO
+    // ========================================
 
     this.interactionSystem =
       new InteractionSystem(
@@ -152,583 +250,654 @@ export class GameScene extends Phaser.Scene {
         this.dialogueSystem
       );
 
+    // ========================================
+    // INVENTÁRIO
+    // ========================================
+
     this.inventorySystem =
-      new InventorySystem(this);
+      new InventorySystem(
+        this
+      );
 
-    // Ataque com botão esquerdo
-    this.input.on(
-      "pointerdown",
-      (
-        pointer: Phaser.Input.Pointer
-      ) => {
-        if (
-          !pointer.leftButtonDown()
-        ) {
-          return;
-        }
+    // ========================================
+    // SLIME
+    // ========================================
 
-        if (
-          this.inventorySystem.isOpen()
-        ) {
-          return;
-        }
-
-        this.playerAttack(
-          pointer
-        );
-      }
+    // Slime começa bem longe do Player.
+    this.spawnSlime(
+      1776,
+      592
     );
 
-    console.log(
-      "GameScene criada com sucesso!"
+    // ========================================
+    // ATAQUE
+    // ========================================
+
+    this.input.on(
+      "pointerdown",
+      () => {
+        if (
+          this.inventorySystem.isOpen() ||
+          this.dialogueSystem.isActive()
+        ) {
+          return;
+        }
+
+        // Player não possui attack().
+        // O ataque é resolvido aqui usando
+        // getAttack() e enemy.takeDamage().
+        this.handlePlayerAttack();
+      }
     );
   }
 
-  update(): void {
+  update(
+    time: number,
+    delta: number
+  ): void {
+    if (!this.player) {
+      return;
+    }
+
+    // ========================================
+    // PLAYER
+    // ========================================
+
     this.player.update();
+
+    // ========================================
+    // INIMIGOS
+    // ========================================
 
     for (
       const enemy of this.enemies
     ) {
-      if (enemy.active) {
+      if (
+        enemy.active &&
+        enemy.visible
+      ) {
+        // O alvo já foi definido com setTarget()
         enemy.update();
       }
     }
 
+    // ========================================
+    // DIÁLOGO
+    // ========================================
+
     this.dialogueSystem.update();
+
+    // ========================================
+    // INTERAÇÃO
+    // ========================================
 
     this.interactionSystem.update(
       this.npcs
     );
 
-    this.inventorySystem.update();
+    // ========================================
+    // INVENTÁRIO
+    // ========================================
+
+    if (
+      !this.dialogueSystem.isActive()
+    ) {
+      this.inventorySystem.update();
+    }
+
+    // ========================================
+    // COMBATE
+    // ========================================
+
+    if (
+      this.player.isInCombat()
+    ) {
+      this.combatTimer =
+        this.player.getCombatTimeRemaining();
+
+      this.combatText.setText(
+        `EM COMBATE\n${Math.ceil(
+          this.combatTimer / 1000
+        )}s`
+      );
+
+      this.combatText.setVisible(
+        true
+      );
+    } else {
+      this.combatText.setVisible(
+        false
+      );
+    }
+
+    // ========================================
+    // HUD
+    // ========================================
+
+    this.updateHUD();
+
+    // ========================================
+    // RESPAWN
+    // ========================================
+
+    this.checkEnemyRespawn(
+      time
+    );
   }
+
+  // ========================================
+  // ESCOLHER CLASSE
+  // ========================================
+
+  private selectPlayerClass(
+    classId: string
+  ): void {
+    const validClass =
+      CHARACTER_CLASSES.find(
+        (characterClass) =>
+          characterClass.id ===
+          classId &&
+          !characterClass.secret
+      );
+
+    if (!validClass) {
+      return;
+    }
+
+    const success =
+      this.player.setClass(
+        validClass.id as CharacterClassId
+      );
+
+    if (!success) {
+      return;
+    }
+
+    this.inventorySystem.setClass(
+      validClass.name
+    );
+
+    console.log(
+      `Classe escolhida: ${validClass.name}`
+    );
+
+    console.log(
+      `Força: ${validClass.strength}`
+    );
+
+    console.log(
+      `Vitalidade: ${validClass.vitality}`
+    );
+
+    console.log(
+      `Defesa: ${validClass.defense}`
+    );
+
+    console.log(
+      `Agilidade: ${validClass.agility}`
+    );
+
+    console.log(
+      `Sorte: ${validClass.luck}`
+    );
+  }
+
+  // ========================================
+  // CRIAR SLIME
+  // ========================================
 
   private spawnSlime(
     x: number,
     y: number
   ): void {
-    const enemy =
+    const slime =
       new Enemy(
         this,
         x,
-        y,
-        "Slime",
-        100,
-        50,
-        (
-          deadEnemy: Enemy
-        ) => {
-          // XP
-          this.experienceSystem.addExperience(
-            deadEnemy.experienceReward
-          );
-
-          // Drop
-          this.createSlimeDrop(
-            deadEnemy.x,
-            deadEnemy.y
-          );
-
-          // Respawn
-          this.scheduleEnemyRespawn(
-            x,
-            y
-          );
-        }
+        y
       );
 
-    this.enemies.push(
-      enemy
+    slime.setCollideWorldBounds(
+      true
     );
 
-    enemy.setTarget(
+    slime.setTarget(
       this.player
     );
 
-    console.log(
-      "Slime apareceu!"
+    this.physics.add.collider(
+      slime,
+      this.mapManager.walls
     );
+
+    this.physics.add.collider(
+      slime,
+      this.player
+    );
+
+    this.enemies.push(slime);
+
+    slime.onDefeated = () => {
+      this.handleEnemyDefeated(
+        slime
+      );
+    };
   }
 
-  private createSlimeDrop(
+  // ========================================
+  // INIMIGO DERROTADO
+  // ========================================
+
+  private handleEnemyDefeated(
+    enemy: Enemy
+  ): void {
+    const xp =
+      enemy.experienceReward;
+
+    this.experienceSystem.addExperience(
+      xp
+    );
+
+    this.createItemDrop(
+      enemy.x,
+      enemy.y
+    );
+
+    enemy.setActive(false);
+    enemy.setVisible(false);
+
+    const body =
+      enemy.body as
+        | Phaser.Physics.Arcade.Body
+        | null;
+
+    if (body) {
+      body.enable = false;
+    }
+
+    enemy.respawnAt =
+      this.time.now + 5000;
+  }
+
+  // ========================================
+  // DROP
+  // ========================================
+
+  private createItemDrop(
     x: number,
     y: number
   ): void {
-    const slimeGel =
-      new Item({
-        id: "slime_gel",
-        name: "Gel de Slime",
-        type: "material",
-        description:
-          "Um material deixado por Slimes.",
-      });
+    const random =
+      Math.random();
 
-    const drop =
-      new ItemDrop(
-        this,
-        x,
-        y,
-        slimeGel,
-        this.player,
-        (item: Item) => {
-          const added =
-            this.inventorySystem.addItem(
-              item,
-              1
-            );
+    let textureKey: string;
+    let itemName: string;
+    let rarity:
+      | "common"
+      | "uncommon"
+      | "rare"
+      | "epic"
+      | "legendary";
 
-          if (added) {
-            console.log(
-              `Você coletou ${item.name}!`
-            );
-          }
-        }
+    if (random < 0.75) {
+      textureKey =
+        "slime_gel";
+
+      itemName =
+        "Gel de Slime";
+
+      rarity =
+        "common";
+    } else if (
+      random < 0.95
+    ) {
+      textureKey =
+        "slime_core";
+
+      itemName =
+        "Núcleo de Slime";
+
+      rarity =
+        "rare";
+    } else {
+      textureKey =
+        "slime_essence";
+
+      itemName =
+        "Essência de Slime";
+
+      rarity =
+        "legendary";
+    }
+
+    const quantity =
+      Phaser.Math.Between(
+        1,
+        3
       );
 
-    this.itemDrops.push(
-      drop
-    );
+    const item = {
+      id: textureKey,
+      name: itemName,
+      type: "material",
+      description:
+        "Material obtido de um slime.",
+      rarity,
+    } as Item;
 
-    console.log(
-      "Slime deixou um Gel de Slime!"
-    );
-  }
-
-  private scheduleEnemyRespawn(
-    x: number,
-    y: number
-  ): void {
-    console.log(
-      `Novo Slime aparecerá em ${
-        this.enemyRespawnDelay / 1000
-      } segundos.`
-    );
-
-    this.time.delayedCall(
-      this.enemyRespawnDelay,
-      () => {
-        if (
-          !this.player ||
-          this.player.isPlayerDead()
-        ) {
-          return;
-        }
-
-        this.spawnSlime(
-          x,
-          y
+    // O ItemDrop já cuida do overlap com o
+    // player, do efeito de coleta e do
+    // destroy(). Aqui só passamos o item, o
+    // player e o callback de coleta.
+    new ItemDrop(
+      this,
+      x,
+      y,
+      item,
+      this.player,
+      (collectedItem: Item) => {
+        this.inventorySystem.addItem(
+          collectedItem,
+          quantity
         );
       }
     );
   }
 
-  private createHUD(): void {
-    this.levelText =
-      this.add
-        .text(
-          25,
-          20,
-          "Nível 1",
-          {
-            fontSize: "22px",
-            color: "#ffffff",
-            fontStyle: "bold",
-          }
-        )
-        .setScrollFactor(0)
-        .setDepth(2000);
+  // ========================================
+  // ATAQUE DO PLAYER
+  // ========================================
 
-    this.experienceText =
-      this.add
-        .text(
-          25,
-          48,
-          "XP: 0 / 100",
-          {
-            fontSize: "16px",
-            color: "#ffffff",
-          }
-        )
-        .setScrollFactor(0)
-        .setDepth(2000);
-
-    this.experienceBarBackground =
-      this.add
-        .rectangle(
-          25,
-          75,
-          220,
-          12,
-          0x222222
-        )
-        .setOrigin(0, 0.5)
-        .setScrollFactor(0)
-        .setDepth(1999);
-
-    this.experienceBar =
-      this.add
-        .rectangle(
-          25,
-          75,
-          0,
-          12,
-          0x3498db
-        )
-        .setOrigin(0, 0.5)
-        .setScrollFactor(0)
-        .setDepth(2000);
-
-    this.levelUpText =
-      this.add
-        .text(
-          this.scale.width / 2,
-          this.scale.height / 2 - 100,
-          "LEVEL UP!",
-          {
-            fontSize: "48px",
-            color: "#ffd700",
-            fontStyle: "bold",
-            stroke: "#000000",
-            strokeThickness: 6,
-          }
-        )
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(3000)
-        .setAlpha(0);
-  }
-
-  private updateExperienceHUD(
-    experience: number,
-    experienceToNextLevel: number,
-    level: number
-  ): void {
-    if (!this.levelText) {
-      return;
-    }
-
-    this.levelText.setText(
-      `Nível ${level}`
-    );
-
-    this.experienceText.setText(
-      `XP: ${experience} / ${experienceToNextLevel}`
-    );
-
-    const percentage =
-      Phaser.Math.Clamp(
-        experience /
-          experienceToNextLevel,
-        0,
-        1
-      );
-
-    this.experienceBar.width =
-      220 * percentage;
-  }
-
-  private showLevelUp(
-    level: number
-  ): void {
-    this.levelUpText.setText(
-      `LEVEL UP!\nNível ${level}`
-    );
-
-    this.levelUpText.setAlpha(0);
-    this.levelUpText.setScale(
-      0.5
-    );
-
-    this.tweens.add({
-      targets:
-        this.levelUpText,
-
-      alpha: 1,
-      scale: 1,
-
-      duration: 300,
-
-      ease: "Back.easeOut",
-
-      hold: 900,
-
-      yoyo: true,
-
-      onComplete: () => {
-        this.levelUpText.setAlpha(
-          0
-        );
-      },
-    });
-  }
-
-  private playerAttack(
-    pointer: Phaser.Input.Pointer
-  ): void {
-    if (!this.canAttack) {
-      return;
-    }
-
+  private handlePlayerAttack(): void {
     if (
       this.player.isPlayerDead()
     ) {
       return;
     }
 
-    this.canAttack = false;
+    const attackRange = 60;
 
-    this.time.delayedCall(
-      this.attackCooldown,
-      () => {
-        this.canAttack = true;
-      }
-    );
-
-    const worldPoint =
-      this.cameras.main.getWorldPoint(
-        pointer.x,
-        pointer.y
-      );
-
-    const direction =
-      new Phaser.Math.Vector2(
-        worldPoint.x -
-          this.player.x,
-        worldPoint.y -
-          this.player.y
-      );
-
-    if (
-      direction.length() === 0
-    ) {
-      direction.set(1, 0);
-    } else {
-      direction.normalize();
-    }
-
-    const attackDistance = 35;
-
-    const attackX =
-      this.player.x +
-      direction.x *
-        attackDistance;
-
-    const attackY =
-      this.player.y +
-      direction.y *
-        attackDistance;
-
-    this.createAttackEffect(
-      attackX,
-      attackY
-    );
-
-    this.checkAttackHit(
-      attackX,
-      attackY
-    );
-  }
-
-  private createAttackEffect(
-    x: number,
-    y: number
-  ): void {
-    const attackEffect =
-      this.add.circle(
-        x,
-        y,
-        12,
-        0xffffff
-      );
-
-    attackEffect.setDepth(
-      1000
-    );
-
-    this.tweens.add({
-      targets:
-        attackEffect,
-
-      scale: 2.5,
-      alpha: 0,
-
-      duration: 180,
-
-      ease: "Quad.easeOut",
-
-      onComplete: () => {
-        attackEffect.destroy();
-      },
-    });
-
-    const flash =
-      this.add.circle(
-        x,
-        y,
-        5,
-        0xffffff
-      );
-
-    flash.setDepth(
-      1001
-    );
-
-    this.tweens.add({
-      targets: flash,
-
-      scale: 3,
-      alpha: 0,
-
-      duration: 80,
-
-      onComplete: () => {
-        flash.destroy();
-      },
-    });
-  }
-
-  private checkAttackHit(
-    attackX: number,
-    attackY: number
-  ): void {
     for (
       const enemy of this.enemies
     ) {
-      if (!enemy.active) {
+      if (
+        !enemy.active ||
+        !enemy.visible
+      ) {
         continue;
       }
 
       const distance =
         Phaser.Math.Distance.Between(
-          attackX,
-          attackY,
+          this.player.x,
+          this.player.y,
           enemy.x,
           enemy.y
         );
 
-      if (
-        distance <=
-        this.attackRange
-      ) {
-        this.createHitEffect(
-          enemy.x,
-          enemy.y
-        );
-
-        this.hitStop();
-
+      if (distance <= attackRange) {
         enemy.takeDamage(
-          this.attackDamage
+          this.player.getAttack()
         );
 
-        console.log(
-          "ATAQUE ACERTOU O INIMIGO!"
-        );
-
-        break;
+        this.player.enterCombat();
       }
     }
   }
 
-  private createHitEffect(
-    x: number,
-    y: number
+  // ========================================
+  // RESPAWN
+  // ========================================
+
+  private checkEnemyRespawn(
+    time: number
   ): void {
-    const impact =
-      this.add.circle(
-        x,
-        y,
-        6,
-        0xffffff
+    for (
+      const enemy of this.enemies
+    ) {
+      if (
+        enemy.respawnAt !== undefined &&
+        time >= enemy.respawnAt
+      ) {
+        enemy.resetEnemy();
+
+        enemy.setPosition(
+          1776,
+          592
+        );
+
+        enemy.setTarget(
+          this.player
+        );
+      }
+    }
+  }
+
+  // ========================================
+  // HUD
+  // ========================================
+
+  private createHUD(): void {
+    // ========================================
+    // VIDA
+    // ========================================
+
+    this.healthBarBackground =
+      this.add.rectangle(
+        20,
+        20,
+        220,
+        18,
+        0x222222
       );
 
-    impact.setDepth(
-      1100
+    this.healthBar =
+      this.add.rectangle(
+        20,
+        20,
+        220,
+        18,
+        0xb52b2b
+      );
+
+    this.healthBarBackground
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(1000);
+
+    this.healthBar
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(1001);
+
+    // ========================================
+    // STAMINA
+    // ========================================
+
+    this.staminaBarBackground =
+      this.add.rectangle(
+        20,
+        45,
+        220,
+        12,
+        0x222222
+      );
+
+    this.staminaBar =
+      this.add.rectangle(
+        20,
+        45,
+        220,
+        12,
+        0x2b8fca
+      );
+
+    this.staminaBarBackground
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(1000);
+
+    this.staminaBar
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(1001);
+
+    // ========================================
+    // LEVEL
+    // ========================================
+
+    this.levelText =
+      this.add.text(
+        20,
+        65,
+        "Nível 1",
+        {
+          fontSize: "16px",
+          color: "#ffffff",
+        }
+      );
+
+    this.levelText
+      .setScrollFactor(0)
+      .setDepth(1000);
+
+    // ========================================
+    // XP
+    // ========================================
+
+    this.xpText =
+      this.add.text(
+        20,
+        88,
+        "XP: 0 / 100",
+        {
+          fontSize: "13px",
+          color: "#ffffff",
+        }
+      );
+
+    this.xpText
+      .setScrollFactor(0)
+      .setDepth(1000);
+
+    // ========================================
+    // COMBATE
+    // ========================================
+
+    this.combatText =
+      this.add.text(
+        640,
+        30,
+        "",
+        {
+          fontSize: "16px",
+          color: "#ff5555",
+          align: "center",
+          backgroundColor:
+            "#000000",
+          padding: {
+            x: 10,
+            y: 6,
+          },
+        }
+      );
+
+    this.combatText
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(1000)
+      .setVisible(false);
+  }
+
+  // ========================================
+  // ATUALIZAR HUD
+  // ========================================
+
+  private updateHUD(): void {
+    const health =
+      this.player.health;
+
+    const maxHealth =
+      this.player.maxHealth;
+
+    const healthPercent =
+      Phaser.Math.Clamp(
+        health / maxHealth,
+        0,
+        1
+      );
+
+    this.healthBar.width =
+      220 * healthPercent;
+
+    const stamina =
+      this.player.stamina;
+
+    const maxStamina =
+      this.player.maxStamina;
+
+    const staminaPercent =
+      Phaser.Math.Clamp(
+        stamina / maxStamina,
+        0,
+        1
+      );
+
+    this.staminaBar.width =
+      220 * staminaPercent;
+
+    const level =
+      this.experienceSystem.getLevel();
+
+    const currentXP =
+      this.experienceSystem.getExperience();
+
+    const requiredXP =
+      this.experienceSystem.getExperienceToNextLevel();
+
+    this.levelText.setText(
+      `Nível ${level}`
     );
+
+    this.xpText.setText(
+      `XP: ${currentXP} / ${requiredXP}`
+    );
+  }
+
+  // ========================================
+  // LEVEL UP
+  // ========================================
+
+  private showLevelUpMessage(
+    level: number
+  ): void {
+    const text =
+      this.add.text(
+        this.scale.width / 2,
+        this.scale.height / 2 - 80,
+        `LEVEL UP!\nNível ${level}`,
+        {
+          fontSize: "32px",
+          color: "#ffd700",
+          align: "center",
+          stroke: "#000000",
+          strokeThickness: 5,
+        }
+      );
+
+    text
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2000);
 
     this.tweens.add({
-      targets: impact,
-
-      scale: 3,
+      targets: text,
       alpha: 0,
-
-      duration: 120,
-
-      ease: "Back.easeOut",
-
+      y: text.y - 50,
+      duration: 1800,
       onComplete: () => {
-        impact.destroy();
+        text.destroy();
       },
     });
-
-    for (
-      let i = 0;
-      i < 6;
-      i++
-    ) {
-      const angle =
-        Phaser.Math.FloatBetween(
-          0,
-          Math.PI * 2
-        );
-
-      const distance =
-        Phaser.Math.Between(
-          12,
-          25
-        );
-
-      const particle =
-        this.add.rectangle(
-          x,
-          y,
-          4,
-          4,
-          0xffffff
-        );
-
-      particle.setDepth(
-        1101
-      );
-
-      this.tweens.add({
-        targets: particle,
-
-        x:
-          x +
-          Math.cos(angle) *
-            distance,
-
-        y:
-          y +
-          Math.sin(angle) *
-            distance,
-
-        alpha: 0,
-
-        duration: 180,
-
-        onComplete: () => {
-          particle.destroy();
-        },
-      });
-    }
-  }
-
-  private hitStop(): void {
-    const previousTimeScale =
-      this.time.timeScale;
-
-    this.time.timeScale =
-      0.05;
-
-    this.time.delayedCall(
-      35,
-      () => {
-        this.time.timeScale =
-          previousTimeScale;
-      }
-    );
   }
 }

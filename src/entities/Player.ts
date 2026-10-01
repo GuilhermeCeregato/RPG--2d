@@ -3,6 +3,13 @@ import {
   PLAYER_SPEED,
   SCENE_KEYS,
 } from "../utils/constants";
+import { Weapon } from "../items/Weapon";
+import {
+  CHARACTER_CLASSES,
+  CharacterClassData,
+  CharacterClassId,
+} from "./CharacterClass";
+import { StatsSystem } from "../systems/StatsSystem";
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -14,7 +21,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     D: Phaser.Input.Keyboard.Key;
   };
 
+  private sprintKey!: Phaser.Input.Keyboard.Key;
+
+  // =========================
+  // CLASSE
+  // =========================
+
+  private characterClass: CharacterClassData;
+
+  // =========================
   // VIDA
+  // =========================
+
   public maxHealth = 100;
   public health = 100;
 
@@ -26,10 +44,48 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private isDead = false;
 
+  // Regeneração passiva
+  private healthRegenPerSecond = 5;
+
+  // =========================
+  // COMBATE
+  // =========================
+
+  private inCombat = false;
+
+  private combatDuration = 30000;
+
+  private combatTimer = 0;
+
+  // =========================
   // LEVEL
+  // =========================
+
   public level = 1;
 
   private healthPerLevel = 20;
+
+  // =========================
+  // STAMINA
+  // =========================
+
+  public maxStamina = 100;
+  public stamina = 100;
+
+  private sprintSpeed = 300;
+
+  private staminaDrainPerSecond = 15;
+  private staminaRegenPerSecond = 20;
+
+  private sprintEnabled = false;
+
+  // =========================
+  // ATAQUE
+  // =========================
+
+  public baseAttack = 10;
+
+  private equippedWeapon: Weapon | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -49,7 +105,33 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     body.setCollideWorldBounds(true);
 
+    // =========================
+    // CLASSE INICIAL
+    // =========================
+
+    this.characterClass =
+      CHARACTER_CLASSES.find(
+        (characterClass) =>
+          characterClass.id === "warrior"
+      )!;
+
+    // =========================
+    // VIDA BASE DA CLASSE
+    // =========================
+
+    this.maxHealth =
+      StatsSystem.getMaxHealth(
+        100,
+        this.characterClass
+      );
+
+    this.health =
+      this.maxHealth;
+
+    // =========================
     // BARRA DE VIDA - FUNDO
+    // =========================
+
     this.healthBarBackground =
       scene.add.rectangle(
         this.x,
@@ -61,7 +143,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.healthBarBackground.setDepth(1000);
 
+    // =========================
     // BARRA DE VIDA
+    // =========================
+
     this.healthBar =
       scene.add.rectangle(
         this.x,
@@ -78,7 +163,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       0.5
     );
 
+    // =========================
     // TECLADO
+    // =========================
+
     if (!scene.input.keyboard) {
       throw new Error(
         "Teclado não disponível."
@@ -105,10 +193,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         Phaser.Input.Keyboard.KeyCodes.D
       ),
     };
+
+    this.sprintKey =
+      scene.input.keyboard.addKey(
+        Phaser.Input.Keyboard.KeyCodes.SHIFT
+      );
   }
 
   update(): void {
-    // Atualiza posição da barra de vida
+    // =========================
+    // BARRA DE VIDA
+    // =========================
+
     this.healthBarBackground.setPosition(
       this.x,
       this.y - 22
@@ -119,21 +215,99 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.y - 22
     );
 
-    // Se estiver morto, não pode se mover
+    // =========================
+    // SE ESTIVER MORTO
+    // =========================
+
     if (this.isDead) {
       this.setVelocity(0, 0);
       return;
     }
 
+    const delta =
+      this.scene.game.loop.delta /
+      1000;
+
+    // =========================
+    // COMBATE
+    // =========================
+
+    if (this.inCombat) {
+      this.combatTimer -=
+        this.scene.game.loop.delta;
+
+      // Sai do combate após
+      // 30 segundos sem hits.
+      if (
+        this.combatTimer <= 0
+      ) {
+        this.combatTimer = 0;
+
+        this.inCombat = false;
+
+        console.log(
+          "Player saiu de combate."
+        );
+      }
+    }
+
+    // =========================
+    // REGENERAÇÃO DE VIDA
+    // =========================
+
+    if (
+      !this.inCombat &&
+      this.health < this.maxHealth
+    ) {
+      this.health +=
+        this.healthRegenPerSecond *
+        delta;
+
+      this.health =
+        Math.min(
+          this.maxHealth,
+          this.health
+        );
+
+      this.updateHealthBar();
+    }
+
+    // =========================
+    // TOGGLE DO SPRINT
+    // =========================
+
+    if (
+      Phaser.Input.Keyboard.JustDown(
+        this.sprintKey
+      )
+    ) {
+      if (
+        this.stamina > 0
+      ) {
+        this.sprintEnabled =
+          !this.sprintEnabled;
+
+        console.log(
+          this.sprintEnabled
+            ? "Sprint ativado!"
+            : "Sprint desativado!"
+        );
+      }
+    }
+
     let velocityX = 0;
     let velocityY = 0;
+
+    // =========================
+    // MOVIMENTO
+    // =========================
 
     // ESQUERDA
     if (
       this.wasd.A.isDown ||
       this.cursors.left.isDown
     ) {
-      velocityX = -PLAYER_SPEED;
+      velocityX = -1;
     }
 
     // DIREITA
@@ -141,7 +315,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.wasd.D.isDown ||
       this.cursors.right.isDown
     ) {
-      velocityX = PLAYER_SPEED;
+      velocityX = 1;
     }
 
     // CIMA
@@ -149,7 +323,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.wasd.W.isDown ||
       this.cursors.up.isDown
     ) {
-      velocityY = -PLAYER_SPEED;
+      velocityY = -1;
     }
 
     // BAIXO
@@ -157,7 +331,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.wasd.S.isDown ||
       this.cursors.down.isDown
     ) {
-      velocityY = PLAYER_SPEED;
+      velocityY = 1;
     }
 
     const velocity =
@@ -166,17 +340,393 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         velocityY
       );
 
-    // Impede movimento diagonal mais rápido
-    if (velocity.length() > 0) {
+    const isMoving =
+      velocity.length() > 0;
+
+    // =========================
+    // STAMINA
+    // =========================
+
+    if (
+      this.sprintEnabled &&
+      isMoving
+    ) {
+      const staminaUsed =
+        this.staminaDrainPerSecond *
+        delta;
+
+      this.stamina -= staminaUsed;
+
+      this.stamina =
+        Math.max(
+          0,
+          this.stamina
+        );
+
+      // Se acabou a stamina,
+      // desliga o sprint.
+      if (
+        this.stamina <= 0
+      ) {
+        this.stamina = 0;
+
+        this.sprintEnabled =
+          false;
+
+        console.log(
+          "Stamina acabou! Sprint desativado."
+        );
+      }
+    }
+
+    else if (
+      !this.sprintEnabled
+    ) {
+      this.stamina +=
+        this.staminaRegenPerSecond *
+        delta;
+
+      this.stamina =
+        Math.min(
+          this.maxStamina,
+          this.stamina
+        );
+    }
+
+    // =========================
+    // VELOCIDADE
+    // =========================
+
+    const normalSpeed =
+      StatsSystem.getMovementSpeed(
+        PLAYER_SPEED,
+        this.characterClass
+      );
+
+    const sprintSpeed =
+      StatsSystem.getMovementSpeed(
+        this.sprintSpeed,
+        this.characterClass
+      );
+
+    const currentSpeed =
+      this.sprintEnabled &&
+      isMoving
+        ? sprintSpeed
+        : normalSpeed;
+
+    // Impede movimento diagonal
+    // de ficar mais rápido.
+    if (
+      velocity.length() > 0
+    ) {
       velocity
         .normalize()
-        .scale(PLAYER_SPEED);
+        .scale(
+          currentSpeed
+        );
     }
 
     this.setVelocity(
       velocity.x,
       velocity.y
     );
+  }
+
+  // =========================
+  // CLASSE
+  // =========================
+
+  setClass(
+    classId: CharacterClassId
+  ): boolean {
+    const newClass =
+      CHARACTER_CLASSES.find(
+        (characterClass) =>
+          characterClass.id === classId
+      );
+
+    if (!newClass) {
+      return false;
+    }
+
+    this.characterClass =
+      newClass;
+
+    this.maxHealth =
+      StatsSystem.getMaxHealth(
+        100 +
+          (this.level - 1) *
+            this.healthPerLevel,
+        this.characterClass
+      );
+
+    this.health =
+      this.maxHealth;
+
+    this.updateHealthBar();
+
+    console.log(
+      `Classe escolhida: ${this.characterClass.name}`
+    );
+
+    return true;
+  }
+
+  getClass(): CharacterClassId {
+    return this.characterClass.id;
+  }
+
+  getClassData(): CharacterClassData {
+    return this.characterClass;
+  }
+
+  // =========================
+  // ATRIBUTOS
+  // =========================
+
+  getStrength(): number {
+    return StatsSystem.getStrength(
+      this.characterClass
+    );
+  }
+
+  getVitality(): number {
+    return StatsSystem.getVitality(
+      this.characterClass
+    );
+  }
+
+  getDefense(): number {
+    return StatsSystem.getDefense(
+      this.characterClass
+    );
+  }
+
+  getAgility(): number {
+    return StatsSystem.getAgility(
+      this.characterClass
+    );
+  }
+
+  getLuck(): number {
+    return StatsSystem.getLuck(
+      this.characterClass
+    );
+  }
+
+  getDodgeChance(): number {
+    return StatsSystem.getDodgeChance(
+      this.characterClass
+    );
+  }
+
+  // =========================
+  // COMBATE
+  // =========================
+
+  enterCombat(): void {
+    if (this.isDead) {
+      return;
+    }
+
+    const wasAlreadyInCombat =
+      this.inCombat;
+
+    this.inCombat = true;
+
+    // Reinicia os 30 segundos.
+    this.combatTimer =
+      this.combatDuration;
+
+    if (!wasAlreadyInCombat) {
+      console.log(
+        "Player entrou em combate!"
+      );
+    }
+  }
+
+  isInCombat(): boolean {
+    return this.inCombat;
+  }
+
+  getCombatTimeRemaining(): number {
+    if (!this.inCombat) {
+      return 0;
+    }
+
+    return Math.max(
+      0,
+      this.combatTimer
+    );
+  }
+
+  // =========================
+  // VIDA
+  // =========================
+
+  getHealth(): number {
+    return this.health;
+  }
+
+  getMaxHealth(): number {
+    return this.maxHealth;
+  }
+
+  private updateHealthBar(): void {
+    const healthPercent =
+      Phaser.Math.Clamp(
+        this.health /
+          this.maxHealth,
+        0,
+        1
+      );
+
+    this.healthBar.setScale(
+      healthPercent,
+      1
+    );
+  }
+
+  heal(amount: number): void {
+    if (
+      this.isDead ||
+      amount <= 0
+    ) {
+      return;
+    }
+
+    this.health += amount;
+
+    this.health =
+      Math.min(
+        this.maxHealth,
+        this.health
+      );
+
+    this.updateHealthBar();
+
+    console.log(
+      `Player recuperou ${amount} de HP. Vida: ${Math.ceil(this.health)}/${this.maxHealth}`
+    );
+  }
+
+  // =========================
+  // STAMINA
+  // =========================
+
+  useStamina(
+    amount: number
+  ): boolean {
+    if (
+      amount <= 0
+    ) {
+      return true;
+    }
+
+    if (
+      this.stamina < amount
+    ) {
+      return false;
+    }
+
+    this.stamina -= amount;
+
+    this.stamina =
+      Math.max(
+        0,
+        this.stamina
+      );
+
+    return true;
+  }
+
+  restoreStamina(
+    amount: number
+  ): void {
+    if (
+      amount <= 0
+    ) {
+      return;
+    }
+
+    this.stamina += amount;
+
+    this.stamina =
+      Math.min(
+        this.maxStamina,
+        this.stamina
+      );
+  }
+
+  getStamina(): number {
+    return this.stamina;
+  }
+
+  getMaxStamina(): number {
+    return this.maxStamina;
+  }
+
+  isSprinting(): boolean {
+    return this.sprintEnabled;
+  }
+
+  // =========================
+  // ATAQUE
+  // =========================
+
+  equipWeapon(weapon: Weapon): void {
+    if (this.isDead) {
+      return;
+    }
+
+    this.equippedWeapon = weapon;
+
+    console.log(
+      `Arma equipada: ${weapon.name}`
+    );
+
+    console.log(
+      `ATK da arma: +${weapon.attack}`
+    );
+
+    console.log(
+      `ATK total: ${this.getAttack()}`
+    );
+  }
+
+  unequipWeapon(): void {
+    if (!this.equippedWeapon) {
+      return;
+    }
+
+    console.log(
+      `Arma removida: ${this.equippedWeapon.name}`
+    );
+
+    this.equippedWeapon = null;
+
+    console.log(
+      `ATK total: ${this.getAttack()}`
+    );
+  }
+
+  getAttack(): number {
+    const weaponAttack =
+      this.equippedWeapon?.attack ?? 0;
+
+    const baseDamage =
+      this.baseAttack +
+      weaponAttack;
+
+    return StatsSystem.getPhysicalDamage(
+      baseDamage,
+      this.characterClass
+    );
+  }
+
+  getEquippedWeapon(): Weapon | null {
+    return this.equippedWeapon;
   }
 
   // =========================
@@ -191,13 +741,38 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.level = newLevel;
 
     // Aumenta a vida máxima
-    this.maxHealth += this.healthPerLevel;
+    this.maxHealth =
+      StatsSystem.getMaxHealth(
+        100 +
+          (this.level - 1) *
+            this.healthPerLevel,
+        this.characterClass
+      );
 
     // Recupera toda a vida
-    this.health = this.maxHealth;
+    this.health =
+      this.maxHealth;
+
+    // Recupera toda a stamina
+    this.stamina =
+      this.maxStamina;
+
+    // Desliga o sprint
+    this.sprintEnabled =
+      false;
+
+    // Sai do combate
+    this.inCombat =
+      false;
+
+    this.combatTimer =
+      0;
 
     // Recupera a barra de vida
-    this.healthBar.setScale(1, 1);
+    this.healthBar.setScale(
+      1,
+      1
+    );
 
     // Efeito visual de level up
     this.setTint(0xffff00);
@@ -221,6 +796,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     console.log(
       `Vida máxima: ${this.maxHealth}`
     );
+
+    console.log(
+      `Stamina máxima: ${this.maxStamina}`
+    );
+
+    console.log(
+      `ATK atual: ${this.getAttack()}`
+    );
   }
 
   // =========================
@@ -236,7 +819,37 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    this.health -= amount;
+    // =========================
+    // ESQUIVA
+    // =========================
+
+    const dodgeChance =
+      this.getDodgeChance();
+
+    if (
+      Math.random() <
+      dodgeChance
+    ) {
+      console.log(
+        `Player desviou do ataque! (${Math.round(dodgeChance * 100)}% de esquiva)`
+      );
+
+      return;
+    }
+
+    // Entrou em combate porque
+    // recebeu dano.
+    this.enterCombat();
+
+    // Aplica a defesa da classe.
+    const finalDamage =
+      StatsSystem.getDamageTaken(
+        amount,
+        this.characterClass
+      );
+
+    this.health -=
+      finalDamage;
 
     this.health = Math.max(
       0,
@@ -244,7 +857,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
 
     console.log(
-      `Player recebeu ${amount} de dano. Vida: ${this.health}/${this.maxHealth}`
+      `Player recebeu ${finalDamage} de dano. Vida: ${Math.ceil(this.health)}/${this.maxHealth}`
     );
 
     // Knockback
@@ -259,14 +872,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     // Atualiza barra de vida
-    const healthPercent =
-      this.health /
-      this.maxHealth;
-
-    this.healthBar.setScale(
-      healthPercent,
-      1
-    );
+    this.updateHealthBar();
 
     // Efeito de dano
     this.setTint(0xffffff);
@@ -284,7 +890,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
 
     // Morte
-    if (this.health <= 0) {
+    if (
+      this.health <= 0
+    ) {
       this.die();
     }
   }
@@ -300,14 +908,28 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.isDead = true;
 
-    this.setVelocity(0, 0);
+    this.inCombat =
+      false;
+
+    this.combatTimer =
+      0;
+
+    this.sprintEnabled =
+      false;
+
+    this.setVelocity(
+      0,
+      0
+    );
 
     console.log(
       "PLAYER MORREU!"
     );
 
     // Deixa o player cinza
-    this.setTint(0x555555);
+    this.setTint(
+      0x555555
+    );
 
     // Vai para Game Over
     this.scene.time.delayedCall(

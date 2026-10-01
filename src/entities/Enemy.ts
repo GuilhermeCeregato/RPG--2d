@@ -8,6 +8,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // XP que esse inimigo entrega ao morrer
   public experienceReward: number;
 
+  // Momento em que o inimigo deve renascer
+  public respawnAt: number | undefined;
+
   private healthBarBackground: Phaser.GameObjects.Rectangle;
   private healthBar: Phaser.GameObjects.Rectangle;
 
@@ -31,6 +34,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   // CALLBACK DE MORTE
   private onDeath?: (
+    enemy: Enemy
+  ) => void;
+
+  // Callback usado pelo GameScene
+  public onDefeated?: (
     enemy: Enemy
   ) => void;
 
@@ -102,6 +110,22 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   // =========================
+  // VISIBILIDADE DA BARRA
+  // =========================
+
+  setHealthBarVisible(
+    visible: boolean
+  ): void {
+    this.healthBarBackground.setVisible(
+      visible
+    );
+
+    this.healthBar.setVisible(
+      visible
+    );
+  }
+
+  // =========================
   // DEFINIR ALVO
   // =========================
 
@@ -112,10 +136,26 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   // =========================
+  // XP
+  // =========================
+
+  getExperienceReward(): number {
+    return this.experienceReward;
+  }
+
+  // =========================
   // UPDATE
   // =========================
 
-  update(): void {
+  update(
+    target?: Phaser.Physics.Arcade.Sprite
+  ): void {
+    // Permite também passar um alvo
+    // diretamente pelo GameScene.
+    if (target) {
+      this.target = target;
+    }
+
     this.healthBarBackground.setPosition(
       this.x,
       this.y - 25
@@ -125,6 +165,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.x,
       this.y - 25
     );
+
+    if (!this.active) {
+      this.setVelocity(0, 0);
+      return;
+    }
 
     if (!this.target) {
       this.setVelocity(0, 0);
@@ -188,9 +233,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // =========================
 
   private attack(): void {
-    if (!this.target) return;
+    if (!this.target) {
+      return;
+    }
 
-    if (!this.canAttack) return;
+    if (!this.canAttack) {
+      return;
+    }
 
     this.canAttack = false;
 
@@ -278,6 +327,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   takeDamage(
     amount: number
   ): void {
+    if (!this.active) {
+      return;
+    }
+
     this.health -= amount;
 
     this.health = Math.max(
@@ -354,6 +407,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // =========================
 
   private die(): void {
+    if (!this.active) {
+      return;
+    }
+
     console.log(
       `${this.enemyName} morreu!`
     );
@@ -362,16 +419,73 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       `XP ganho: ${this.experienceReward}`
     );
 
-    // Avisar o GameScene
+    // Para o inimigo
+    this.setVelocity(0, 0);
+
+    // Desativa o corpo físico
+    const body =
+      this.body as Phaser.Physics.Arcade.Body;
+
+    body.enable = false;
+
+    // Esconde inimigo
+    this.setActive(false);
+    this.setVisible(false);
+
+    // Esconde barra de vida
+    this.setHealthBarVisible(false);
+
+    // Marca respawn
+    this.respawnAt =
+      this.scene.time.now + 5000;
+
+    // Avisar callbacks
     if (this.onDeath) {
       this.onDeath(this);
     }
 
-    // Destruir barra de vida
-    this.healthBarBackground.destroy();
-    this.healthBar.destroy();
+    if (this.onDefeated) {
+      this.onDefeated(this);
+    }
+  }
 
-    // Destruir inimigo
-    this.destroy();
+  // =========================
+  // RESET DO INIMIGO
+  // =========================
+
+  resetEnemy(): void {
+    this.health =
+      this.maxHealth;
+
+    this.canAttack = true;
+
+    this.respawnAt =
+      undefined;
+
+    this.setTint(0xe74c3c);
+
+    this.setScale(1);
+
+    this.healthBar.setScale(
+      1,
+      1
+    );
+
+    this.setHealthBarVisible(
+      true
+    );
+
+    this.setActive(true);
+    this.setVisible(true);
+
+    const body =
+      this.body as Phaser.Physics.Arcade.Body;
+
+    body.enable = true;
+
+    this.setVelocity(
+      0,
+      0
+    );
   }
 }

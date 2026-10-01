@@ -16,11 +16,14 @@ export class ItemDrop extends Phaser.Physics.Arcade.Sprite {
     player: Player,
     onCollect: (item: Item) => void
   ) {
+    const textureKey =
+      ItemDrop.getTextureKey(item);
+
     super(
       scene,
       x,
       y,
-      "slime_gel"
+      textureKey
     );
 
     this.item = item;
@@ -29,7 +32,6 @@ export class ItemDrop extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
-    // Mantém a proporção original do PNG
     const maxWidth = 32;
     const maxHeight = 32;
 
@@ -74,15 +76,37 @@ export class ItemDrop extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
+  private static getTextureKey(
+    item: Item
+  ): string {
+    switch (item.id) {
+      case "slime_gel":
+        return "slime_gel";
+
+      case "slime_core":
+        return "slime_core";
+
+      case "slime_essence":
+        return "slime_essence";
+
+      default:
+        return "slime_gel";
+    }
+  }
+
   private collectEffect(): void {
+    const textureKey =
+      ItemDrop.getTextureKey(
+        this.item
+      );
+
     const effect =
       this.scene.add.image(
         this.x,
         this.y,
-        "slime_gel"
+        textureKey
       );
 
-    // Mantém a proporção original
     const maxWidth = 20;
     const maxHeight = 20;
 

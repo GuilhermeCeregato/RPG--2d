@@ -8,11 +8,13 @@ export class InteractionSystem {
   private player: Player;
   private dialogueSystem: DialogueSystem;
 
-  private interactKey: Phaser.Input.Keyboard.Key;
+  private interactKey:
+    Phaser.Input.Keyboard.Key;
 
   private nearbyNPC: NPC | null = null;
 
-  private interactionText: Phaser.GameObjects.Text;
+  private interactionText:
+    Phaser.GameObjects.Text;
 
   constructor(
     scene: Phaser.Scene,
@@ -21,40 +23,60 @@ export class InteractionSystem {
   ) {
     this.scene = scene;
     this.player = player;
-    this.dialogueSystem = dialogueSystem;
+    this.dialogueSystem =
+      dialogueSystem;
 
-    this.interactKey = scene.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.E
-    );
+    this.interactKey =
+      scene.input.keyboard!.addKey(
+        Phaser.Input.Keyboard.KeyCodes.E
+      );
 
-    this.interactionText = scene.add
-      .text(0, 0, "", {
-        fontSize: "14px",
-        color: "#ffffff",
-        backgroundColor: "#000000",
-        padding: {
-          x: 8,
-          y: 5,
-        },
-      })
-      .setScrollFactor(0)
-      .setDepth(100)
-      .setVisible(false);
+    this.interactionText =
+      scene.add
+        .text(
+          0,
+          0,
+          "",
+          {
+            fontSize: "14px",
+            color: "#ffffff",
+            backgroundColor:
+              "#000000",
+            padding: {
+              x: 8,
+              y: 5,
+            },
+          }
+        )
+        .setScrollFactor(0)
+        .setDepth(100)
+        .setVisible(false);
   }
 
   update(npcs: NPC[]): void {
-    // Enquanto estiver conversando, não permite outra interação
-    if (this.dialogueSystem.isActive()) {
-      this.interactionText.setVisible(false);
+    if (
+      this.dialogueSystem.isActive()
+    ) {
+      this.interactionText.setVisible(
+        false
+      );
+
       return;
     }
 
-    this.nearbyNPC = this.findNearestNPC(npcs);
+    this.nearbyNPC =
+      this.findNearestNPC(
+        npcs
+      );
 
     if (this.nearbyNPC) {
       this.showInteractionPrompt();
 
-      if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      if (
+        Phaser.Input.Keyboard.JustDown(
+          this.interactKey
+        )
+      ) {
         this.interact();
       }
     } else {
@@ -62,21 +84,34 @@ export class InteractionSystem {
     }
   }
 
-  private findNearestNPC(npcs: NPC[]): NPC | null {
-    let closestNPC: NPC | null = null;
-    let closestDistance = Infinity;
+  private findNearestNPC(
+    npcs: NPC[]
+  ): NPC | null {
+    let closestNPC:
+      NPC | null = null;
 
-    for (const npc of npcs) {
-      const distance = Phaser.Math.Distance.Between(
-        this.player.x,
-        this.player.y,
-        npc.x,
-        npc.y
-      );
+    let closestDistance =
+      Infinity;
 
-      if (distance < 60 && distance < closestDistance) {
+    for (
+      const npc of npcs
+    ) {
+      const distance =
+        Phaser.Math.Distance.Between(
+          this.player.x,
+          this.player.y,
+          npc.x,
+          npc.y
+        );
+
+      if (
+        distance < 60 &&
+        distance <
+          closestDistance
+      ) {
         closestNPC = npc;
-        closestDistance = distance;
+        closestDistance =
+          distance;
       }
     }
 
@@ -84,32 +119,49 @@ export class InteractionSystem {
   }
 
   private showInteractionPrompt(): void {
-    if (!this.nearbyNPC) return;
+    if (
+      !this.nearbyNPC
+    ) {
+      return;
+    }
 
     this.interactionText.setText(
       `[E] Falar com ${this.nearbyNPC.npcName}`
     );
 
     this.interactionText.setPosition(
-      this.player.x - this.interactionText.width / 2,
+      this.player.x -
+        this.interactionText
+          .width /
+          2,
       this.player.y - 45
     );
 
-    this.interactionText.setVisible(true);
+    this.interactionText.setVisible(
+      true
+    );
   }
 
   private hideInteractionPrompt(): void {
-    this.interactionText.setVisible(false);
+    this.interactionText.setVisible(
+      false
+    );
   }
 
   private interact(): void {
-    if (!this.nearbyNPC) return;
+    if (
+      !this.nearbyNPC
+    ) {
+      return;
+    }
 
     this.dialogueSystem.start(
       this.nearbyNPC.npcName,
       this.nearbyNPC.dialogues
     );
 
-    this.interactionText.setVisible(false);
+    this.interactionText.setVisible(
+      false
+    );
   }
 }
