@@ -10,6 +10,13 @@ import {
   CharacterClassId,
 } from "./CharacterClass";
 import { StatsSystem } from "../systems/StatsSystem";
+import {
+  EquipmentBonuses,
+} from "../systems/StatsSystem";
+import {
+  drawClassBack,
+  drawClassFront,
+} from "./ClassAccessories";
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -23,15 +30,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private sprintKey!: Phaser.Input.Keyboard.Key;
 
-  // =========================
-  // CLASSE
-  // =========================
-
   private characterClass: CharacterClassData;
 
-  // =========================
-  // VIDA
-  // =========================
+  private accessoryBack!: Phaser.GameObjects.Graphics;
+  private accessoryFront!: Phaser.GameObjects.Graphics;
+
+  private bodySize = 28;
 
   public maxHealth = 100;
   public health = 100;
@@ -42,56 +46,44 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private healthBarWidth = 40;
   private healthBarHeight = 6;
 
+  private healthBarOffsetY = 46;
+
   private isDead = false;
 
-  // Regeneração passiva
   private healthRegenPerSecond = 5;
 
-  // =========================
-  // COMBATE
-  // =========================
-
   private inCombat = false;
-
   private combatDuration = 30000;
-
   private combatTimer = 0;
 
-  // =========================
-  // LEVEL
-  // =========================
-
   public level = 1;
-
   private healthPerLevel = 20;
-
-  // =========================
-  // STAMINA
-  // =========================
 
   public maxStamina = 100;
   public stamina = 100;
 
   private sprintSpeed = 300;
-
   private staminaDrainPerSecond = 15;
   private staminaRegenPerSecond = 20;
-
   private sprintEnabled = false;
 
-  // =========================
-  // ATAQUE
-  // =========================
-
   public baseAttack = 10;
-
   private equippedWeapon: Weapon | null = null;
 
-  constructor(
-    scene: Phaser.Scene,
-    x: number,
-    y: number
-  ) {
+  // ========================================
+  // BÔNUS DOS EQUIPAMENTOS
+  // ========================================
+
+  private equipmentBonuses: EquipmentBonuses = {
+    strength: 0,
+    vitality: 0,
+    defense: 0,
+    agility: 0,
+    luck: 0,
+    intelligence: 0,
+  };
+
+  constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, "");
 
     scene.add.existing(this);
@@ -99,125 +91,95 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.setDisplaySize(28, 28);
     this.setTint(0x3498db);
+    this.setDepth(10);
 
-    const body =
-      this.body as Phaser.Physics.Arcade.Body;
-
+    const body = this.body as Phaser.Physics.Arcade.Body;
     body.setCollideWorldBounds(true);
-
-    // =========================
-    // CLASSE INICIAL
-    // =========================
 
     this.characterClass =
       CHARACTER_CLASSES.find(
-        (characterClass) =>
-          characterClass.id === "warrior"
+        (characterClass) => characterClass.id === "warrior"
       )!;
 
-    // =========================
-    // VIDA BASE DA CLASSE
-    // =========================
+    this.accessoryBack = scene.add.graphics();
+    this.accessoryBack.setDepth(9);
 
-    this.maxHealth =
-      StatsSystem.getMaxHealth(
-        100,
-        this.characterClass
-      );
+    this.accessoryFront = scene.add.graphics();
+    this.accessoryFront.setDepth(11);
 
-    this.health =
-      this.maxHealth;
+    this.redrawAccessories();
 
-    // =========================
-    // BARRA DE VIDA - FUNDO
-    // =========================
+    this.maxHealth = StatsSystem.getMaxHealth(
+      100,
+      this.characterClass,
+      this.equipmentBonuses
+    );
 
-    this.healthBarBackground =
-      scene.add.rectangle(
-        this.x,
-        this.y - 22,
-        this.healthBarWidth,
-        this.healthBarHeight,
-        0x222222
-      );
+    this.health = this.maxHealth;
+
+    this.healthBarBackground = scene.add.rectangle(
+      this.x,
+      this.y - this.healthBarOffsetY,
+      this.healthBarWidth,
+      this.healthBarHeight,
+      0x222222
+    );
 
     this.healthBarBackground.setDepth(1000);
 
-    // =========================
-    // BARRA DE VIDA
-    // =========================
-
-    this.healthBar =
-      scene.add.rectangle(
-        this.x,
-        this.y - 22,
-        this.healthBarWidth,
-        this.healthBarHeight,
-        0x2ecc71
-      );
-
-    this.healthBar.setDepth(1001);
-
-    this.healthBar.setOrigin(
-      0.5,
-      0.5
+    this.healthBar = scene.add.rectangle(
+      this.x,
+      this.y - this.healthBarOffsetY,
+      this.healthBarWidth,
+      this.healthBarHeight,
+      0x2ecc71
     );
 
-    // =========================
-    // TECLADO
-    // =========================
+    this.healthBar.setDepth(1001);
+    this.healthBar.setOrigin(0.5, 0.5);
 
     if (!scene.input.keyboard) {
-      throw new Error(
-        "Teclado não disponível."
-      );
+      throw new Error("Teclado não disponível.");
     }
 
-    this.cursors =
-      scene.input.keyboard.createCursorKeys();
+    this.cursors = scene.input.keyboard.createCursorKeys();
 
     this.wasd = {
       W: scene.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.W
       ),
-
       A: scene.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.A
       ),
-
       S: scene.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.S
       ),
-
       D: scene.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.D
       ),
     };
 
-    this.sprintKey =
-      scene.input.keyboard.addKey(
-        Phaser.Input.Keyboard.KeyCodes.SHIFT
-      );
+    this.sprintKey = scene.input.keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.SHIFT
+    );
+
+    scene.events.on(
+      Phaser.Scenes.Events.POST_UPDATE,
+      this.updateAccessories,
+      this
+    );
   }
 
   update(): void {
-    // =========================
-    // BARRA DE VIDA
-    // =========================
-
     this.healthBarBackground.setPosition(
       this.x,
-      this.y - 22
+      this.y - this.healthBarOffsetY
     );
 
     this.healthBar.setPosition(
       this.x,
-      this.y - 22
+      this.y - this.healthBarOffsetY
     );
-
-    // =========================
-    // SE ESTIVER MORTO
-    // =========================
 
     if (this.isDead) {
       this.setVelocity(0, 0);
@@ -225,24 +187,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     const delta =
-      this.scene.game.loop.delta /
-      1000;
-
-    // =========================
-    // COMBATE
-    // =========================
+      this.scene.game.loop.delta / 1000;
 
     if (this.inCombat) {
       this.combatTimer -=
         this.scene.game.loop.delta;
 
-      // Sai do combate após
-      // 30 segundos sem hits.
-      if (
-        this.combatTimer <= 0
-      ) {
+      if (this.combatTimer <= 0) {
         this.combatTimer = 0;
-
         this.inCombat = false;
 
         console.log(
@@ -251,39 +203,27 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
-    // =========================
-    // REGENERAÇÃO DE VIDA
-    // =========================
-
     if (
       !this.inCombat &&
       this.health < this.maxHealth
     ) {
       this.health +=
-        this.healthRegenPerSecond *
-        delta;
+        this.healthRegenPerSecond * delta;
 
-      this.health =
-        Math.min(
-          this.maxHealth,
-          this.health
-        );
+      this.health = Math.min(
+        this.maxHealth,
+        this.health
+      );
 
       this.updateHealthBar();
     }
-
-    // =========================
-    // TOGGLE DO SPRINT
-    // =========================
 
     if (
       Phaser.Input.Keyboard.JustDown(
         this.sprintKey
       )
     ) {
-      if (
-        this.stamina > 0
-      ) {
+      if (this.stamina > 0) {
         this.sprintEnabled =
           !this.sprintEnabled;
 
@@ -298,11 +238,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     let velocityX = 0;
     let velocityY = 0;
 
-    // =========================
-    // MOVIMENTO
-    // =========================
-
-    // ESQUERDA
     if (
       this.wasd.A.isDown ||
       this.cursors.left.isDown
@@ -310,7 +245,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       velocityX = -1;
     }
 
-    // DIREITA
     if (
       this.wasd.D.isDown ||
       this.cursors.right.isDown
@@ -318,7 +252,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       velocityX = 1;
     }
 
-    // CIMA
     if (
       this.wasd.W.isDown ||
       this.cursors.up.isDown
@@ -326,7 +259,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       velocityY = -1;
     }
 
-    // BAIXO
     if (
       this.wasd.S.isDown ||
       this.cursors.down.isDown
@@ -343,10 +275,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const isMoving =
       velocity.length() > 0;
 
-    // =========================
-    // STAMINA
-    // =========================
-
     if (
       this.sprintEnabled &&
       isMoving
@@ -357,56 +285,42 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
       this.stamina -= staminaUsed;
 
-      this.stamina =
-        Math.max(
-          0,
-          this.stamina
-        );
+      this.stamina = Math.max(
+        0,
+        this.stamina
+      );
 
-      // Se acabou a stamina,
-      // desliga o sprint.
-      if (
-        this.stamina <= 0
-      ) {
+      if (this.stamina <= 0) {
         this.stamina = 0;
-
-        this.sprintEnabled =
-          false;
+        this.sprintEnabled = false;
 
         console.log(
           "Stamina acabou! Sprint desativado."
         );
       }
-    }
-
-    else if (
-      !this.sprintEnabled
-    ) {
+    } else if (!this.sprintEnabled) {
       this.stamina +=
         this.staminaRegenPerSecond *
         delta;
 
-      this.stamina =
-        Math.min(
-          this.maxStamina,
-          this.stamina
-        );
+      this.stamina = Math.min(
+        this.maxStamina,
+        this.stamina
+      );
     }
-
-    // =========================
-    // VELOCIDADE
-    // =========================
 
     const normalSpeed =
       StatsSystem.getMovementSpeed(
         PLAYER_SPEED,
-        this.characterClass
+        this.characterClass,
+        this.equipmentBonuses
       );
 
     const sprintSpeed =
       StatsSystem.getMovementSpeed(
         this.sprintSpeed,
-        this.characterClass
+        this.characterClass,
+        this.equipmentBonuses
       );
 
     const currentSpeed =
@@ -415,16 +329,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         ? sprintSpeed
         : normalSpeed;
 
-    // Impede movimento diagonal
-    // de ficar mais rápido.
-    if (
-      velocity.length() > 0
-    ) {
+    if (velocity.length() > 0) {
       velocity
         .normalize()
-        .scale(
-          currentSpeed
-        );
+        .scale(currentSpeed);
     }
 
     this.setVelocity(
@@ -433,9 +341,41 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
-  // =========================
-  // CLASSE
-  // =========================
+  private redrawAccessories(): void {
+    const classId =
+      this.characterClass.id;
+
+    this.accessoryBack.clear();
+    this.accessoryFront.clear();
+
+    drawClassBack(
+      this.accessoryBack,
+      classId,
+      0,
+      0,
+      this.bodySize
+    );
+
+    drawClassFront(
+      this.accessoryFront,
+      classId,
+      0,
+      0,
+      this.bodySize
+    );
+  }
+
+  private updateAccessories = (): void => {
+    this.accessoryBack.setPosition(
+      this.x,
+      this.y
+    );
+
+    this.accessoryFront.setPosition(
+      this.x,
+      this.y
+    );
+  };
 
   setClass(
     classId: CharacterClassId
@@ -450,15 +390,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return false;
     }
 
-    this.characterClass =
-      newClass;
+    this.characterClass = newClass;
+
+    this.redrawAccessories();
 
     this.maxHealth =
       StatsSystem.getMaxHealth(
         100 +
           (this.level - 1) *
             this.healthPerLevel,
-        this.characterClass
+        this.characterClass,
+        this.equipmentBonuses
       );
 
     this.health =
@@ -473,6 +415,60 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return true;
   }
 
+  // ========================================
+  // EQUIPAMENTOS / ATRIBUTOS
+  // ========================================
+
+  setEquipmentBonuses(
+    bonuses: Partial<EquipmentBonuses>
+  ): void {
+    this.equipmentBonuses = {
+      strength: bonuses.strength ?? 0,
+      vitality: bonuses.vitality ?? 0,
+      defense: bonuses.defense ?? 0,
+      agility: bonuses.agility ?? 0,
+      luck: bonuses.luck ?? 0,
+      intelligence:
+        bonuses.intelligence ?? 0,
+    };
+
+    const oldMaxHealth =
+      this.maxHealth;
+
+    this.maxHealth =
+      StatsSystem.getMaxHealth(
+        100 +
+          (this.level - 1) *
+            this.healthPerLevel,
+        this.characterClass,
+        this.equipmentBonuses
+      );
+
+    if (
+      this.maxHealth <
+      oldMaxHealth
+    ) {
+      this.health =
+        Math.min(
+          this.health,
+          this.maxHealth
+        );
+    }
+
+    this.updateHealthBar();
+
+    console.log(
+      "Bônus de equipamentos atualizados:",
+      this.equipmentBonuses
+    );
+  }
+
+  getEquipmentBonuses(): EquipmentBonuses {
+    return {
+      ...this.equipmentBonuses,
+    };
+  }
+
   getClass(): CharacterClassId {
     return this.characterClass.id;
   }
@@ -481,49 +477,54 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return this.characterClass;
   }
 
-  // =========================
-  // ATRIBUTOS
-  // =========================
-
   getStrength(): number {
     return StatsSystem.getStrength(
-      this.characterClass
+      this.characterClass,
+      this.equipmentBonuses
     );
   }
 
   getVitality(): number {
     return StatsSystem.getVitality(
-      this.characterClass
+      this.characterClass,
+      this.equipmentBonuses
     );
   }
 
   getDefense(): number {
     return StatsSystem.getDefense(
-      this.characterClass
+      this.characterClass,
+      this.equipmentBonuses
     );
   }
 
   getAgility(): number {
     return StatsSystem.getAgility(
-      this.characterClass
+      this.characterClass,
+      this.equipmentBonuses
     );
   }
 
   getLuck(): number {
     return StatsSystem.getLuck(
-      this.characterClass
+      this.characterClass,
+      this.equipmentBonuses
+    );
+  }
+
+  getIntelligence(): number {
+    return StatsSystem.getIntelligence(
+      this.characterClass,
+      this.equipmentBonuses
     );
   }
 
   getDodgeChance(): number {
     return StatsSystem.getDodgeChance(
-      this.characterClass
+      this.characterClass,
+      this.equipmentBonuses
     );
   }
-
-  // =========================
-  // COMBATE
-  // =========================
 
   enterCombat(): void {
     if (this.isDead) {
@@ -534,8 +535,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.inCombat;
 
     this.inCombat = true;
-
-    // Reinicia os 30 segundos.
     this.combatTimer =
       this.combatDuration;
 
@@ -560,10 +559,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.combatTimer
     );
   }
-
-  // =========================
-  // VIDA
-  // =========================
 
   getHealth(): number {
     return this.health;
@@ -598,45 +593,40 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.health += amount;
 
-    this.health =
-      Math.min(
-        this.maxHealth,
-        this.health
-      );
+    this.health = Math.min(
+      this.maxHealth,
+      this.health
+    );
 
     this.updateHealthBar();
 
     console.log(
-      `Player recuperou ${amount} de HP. Vida: ${Math.ceil(this.health)}/${this.maxHealth}`
+      `Player recuperou ${amount} de HP. Vida: ${Math.ceil(
+        this.health
+      )}/${this.maxHealth}`
     );
   }
-
-  // =========================
-  // STAMINA
-  // =========================
 
   useStamina(
     amount: number
   ): boolean {
-    if (
-      amount <= 0
-    ) {
+    if (amount <= 0) {
       return true;
     }
 
     if (
-      this.stamina < amount
+      this.stamina <
+      amount
     ) {
       return false;
     }
 
     this.stamina -= amount;
 
-    this.stamina =
-      Math.max(
-        0,
-        this.stamina
-      );
+    this.stamina = Math.max(
+      0,
+      this.stamina
+    );
 
     return true;
   }
@@ -644,19 +634,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   restoreStamina(
     amount: number
   ): void {
-    if (
-      amount <= 0
-    ) {
+    if (amount <= 0) {
       return;
     }
 
     this.stamina += amount;
 
-    this.stamina =
-      Math.min(
-        this.maxStamina,
-        this.stamina
-      );
+    this.stamina = Math.min(
+      this.maxStamina,
+      this.stamina
+    );
   }
 
   getStamina(): number {
@@ -671,16 +658,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return this.sprintEnabled;
   }
 
-  // =========================
-  // ATAQUE
-  // =========================
-
-  equipWeapon(weapon: Weapon): void {
+  equipWeapon(
+    weapon: Weapon
+  ): void {
     if (this.isDead) {
       return;
     }
 
-    this.equippedWeapon = weapon;
+    this.equippedWeapon =
+      weapon;
 
     console.log(
       `Arma equipada: ${weapon.name}`
@@ -713,7 +699,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   getAttack(): number {
     const weaponAttack =
-      this.equippedWeapon?.attack ?? 0;
+      this.equippedWeapon?.attack ??
+      0;
 
     const baseDamage =
       this.baseAttack +
@@ -721,61 +708,48 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     return StatsSystem.getPhysicalDamage(
       baseDamage,
-      this.characterClass
+      this.characterClass,
+      this.equipmentBonuses
     );
   }
 
-  getEquippedWeapon(): Weapon | null {
-    return this.equippedWeapon;
-  }
-
-  // =========================
-  // LEVEL UP
-  // =========================
-
-  levelUp(newLevel: number): void {
+  levelUp(
+    newLevel: number
+  ): void {
     if (this.isDead) {
       return;
     }
 
     this.level = newLevel;
 
-    // Aumenta a vida máxima
     this.maxHealth =
       StatsSystem.getMaxHealth(
         100 +
           (this.level - 1) *
             this.healthPerLevel,
-        this.characterClass
+        this.characterClass,
+        this.equipmentBonuses
       );
 
-    // Recupera toda a vida
     this.health =
       this.maxHealth;
 
-    // Recupera toda a stamina
     this.stamina =
       this.maxStamina;
 
-    // Desliga o sprint
-    this.sprintEnabled =
-      false;
+    this.sprintEnabled = false;
 
-    // Sai do combate
-    this.inCombat =
-      false;
+    this.inCombat = false;
+    this.combatTimer = 0;
 
-    this.combatTimer =
-      0;
-
-    // Recupera a barra de vida
     this.healthBar.setScale(
       1,
       1
     );
 
-    // Efeito visual de level up
-    this.setTint(0xffff00);
+    this.setTint(
+      0xffff00
+    );
 
     this.scene.time.delayedCall(
       500,
@@ -784,7 +758,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
           this.active &&
           !this.isDead
         ) {
-          this.setTint(0x3498db);
+          this.setTint(
+            0x3498db
+          );
         }
       }
     );
@@ -806,10 +782,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
-  // =========================
-  // DANO
-  // =========================
-
   takeDamage(
     amount: number,
     knockbackX: number = 0,
@@ -819,10 +791,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    // =========================
-    // ESQUIVA
-    // =========================
-
     const dodgeChance =
       this.getDodgeChance();
 
@@ -831,21 +799,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       dodgeChance
     ) {
       console.log(
-        `Player desviou do ataque! (${Math.round(dodgeChance * 100)}% de esquiva)`
+        `Player desviou do ataque! (${Math.round(
+          dodgeChance * 100
+        )}% de esquiva)`
       );
 
       return;
     }
 
-    // Entrou em combate porque
-    // recebeu dano.
     this.enterCombat();
 
-    // Aplica a defesa da classe.
     const finalDamage =
       StatsSystem.getDamageTaken(
         amount,
-        this.characterClass
+        this.characterClass,
+        this.equipmentBonuses
       );
 
     this.health -=
@@ -857,10 +825,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
 
     console.log(
-      `Player recebeu ${finalDamage} de dano. Vida: ${Math.ceil(this.health)}/${this.maxHealth}`
+      `Player recebeu ${finalDamage} de dano. Vida: ${Math.ceil(
+        this.health
+      )}/${this.maxHealth}`
     );
 
-    // Knockback
     if (
       knockbackX !== 0 ||
       knockbackY !== 0
@@ -871,11 +840,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       );
     }
 
-    // Atualiza barra de vida
     this.updateHealthBar();
 
-    // Efeito de dano
-    this.setTint(0xffffff);
+    this.setTint(
+      0xffffff
+    );
 
     this.scene.time.delayedCall(
       100,
@@ -884,12 +853,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
           this.active &&
           !this.isDead
         ) {
-          this.setTint(0x3498db);
+          this.setTint(
+            0x3498db
+          );
         }
       }
     );
 
-    // Morte
     if (
       this.health <= 0
     ) {
@@ -897,25 +867,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
-  // =========================
-  // MORTE
-  // =========================
-
   private die(): void {
     if (this.isDead) {
       return;
     }
 
     this.isDead = true;
-
-    this.inCombat =
-      false;
-
-    this.combatTimer =
-      0;
-
-    this.sprintEnabled =
-      false;
+    this.inCombat = false;
+    this.combatTimer = 0;
+    this.sprintEnabled = false;
 
     this.setVelocity(
       0,
@@ -926,12 +886,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       "PLAYER MORREU!"
     );
 
-    // Deixa o player cinza
     this.setTint(
       0x555555
     );
 
-    // Vai para Game Over
     this.scene.time.delayedCall(
       800,
       () => {
@@ -941,10 +899,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     );
   }
-
-  // =========================
-  // VERIFICAR SE ESTÁ MORTO
-  // =========================
 
   isPlayerDead(): boolean {
     return this.isDead;

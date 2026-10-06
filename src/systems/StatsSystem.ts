@@ -8,6 +8,16 @@ export interface CharacterStats {
   defense: number;
   agility: number;
   luck: number;
+  intelligence: number;
+}
+
+export interface EquipmentBonuses {
+  strength: number;
+  vitality: number;
+  defense: number;
+  agility: number;
+  luck: number;
+  intelligence: number;
 }
 
 export class StatsSystem {
@@ -16,33 +26,63 @@ export class StatsSystem {
   // =========================
 
   static getStrength(
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
-    return characterClass.strength;
+    return (
+      characterClass.strength +
+      (equipmentBonuses.strength ?? 0)
+    );
   }
 
   static getVitality(
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
-    return characterClass.vitality;
+    return (
+      characterClass.vitality +
+      (equipmentBonuses.vitality ?? 0)
+    );
   }
 
   static getDefense(
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
-    return characterClass.defense;
+    return (
+      characterClass.defense +
+      (equipmentBonuses.defense ?? 0)
+    );
   }
 
   static getAgility(
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
-    return characterClass.agility;
+    return (
+      characterClass.agility +
+      (equipmentBonuses.agility ?? 0)
+    );
   }
 
   static getLuck(
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
-    return characterClass.luck;
+    return (
+      characterClass.luck +
+      (equipmentBonuses.luck ?? 0)
+    );
+  }
+
+  static getIntelligence(
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
+  ): number {
+    return (
+      characterClass.intelligence +
+      (equipmentBonuses.intelligence ?? 0)
+    );
   }
 
   // =========================
@@ -51,11 +91,18 @@ export class StatsSystem {
 
   static getMaxHealth(
     baseHealth: number,
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
+    const vitality =
+      this.getVitality(
+        characterClass,
+        equipmentBonuses
+      );
+
     return (
       baseHealth +
-      characterClass.vitality * 10
+      vitality * 10
     );
   }
 
@@ -65,11 +112,42 @@ export class StatsSystem {
 
   static getPhysicalDamage(
     baseDamage: number,
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
+    const strength =
+      this.getStrength(
+        characterClass,
+        equipmentBonuses
+      );
+
     const multiplier =
       1 +
-      characterClass.strength * 0.05;
+      strength * 0.05;
+
+    return Math.floor(
+      baseDamage * multiplier
+    );
+  }
+
+  // =========================
+  // DANO MÁGICO
+  // =========================
+
+  static getMagicDamage(
+    baseDamage: number,
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
+  ): number {
+    const intelligence =
+      this.getIntelligence(
+        characterClass,
+        equipmentBonuses
+      );
+
+    const multiplier =
+      1 +
+      intelligence * 0.05;
 
     return Math.floor(
       baseDamage * multiplier
@@ -81,10 +159,17 @@ export class StatsSystem {
   // =========================
 
   static getDamageReduction(
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
+    const defense =
+      this.getDefense(
+        characterClass,
+        equipmentBonuses
+      );
+
     return Math.min(
-      characterClass.defense * 0.03,
+      defense * 0.03,
       0.75
     );
   }
@@ -95,11 +180,13 @@ export class StatsSystem {
 
   static getDamageTaken(
     damage: number,
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
     const reduction =
       this.getDamageReduction(
-        characterClass
+        characterClass,
+        equipmentBonuses
       );
 
     return Math.max(
@@ -116,11 +203,18 @@ export class StatsSystem {
 
   static getMovementSpeed(
     baseSpeed: number,
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
+    const agility =
+      this.getAgility(
+        characterClass,
+        equipmentBonuses
+      );
+
     const multiplier =
       1 +
-      characterClass.agility * 0.03;
+      agility * 0.03;
 
     return Math.floor(
       baseSpeed * multiplier
@@ -132,10 +226,17 @@ export class StatsSystem {
   // =========================
 
   static getDodgeChance(
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
+    const agility =
+      this.getAgility(
+        characterClass,
+        equipmentBonuses
+      );
+
     return Math.min(
-      characterClass.agility * 0.01,
+      agility * 0.01,
       0.50
     );
   }
@@ -145,10 +246,14 @@ export class StatsSystem {
   // =========================
 
   static getLuckTier(
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): string {
     const luck =
-      characterClass.luck;
+      this.getLuck(
+        characterClass,
+        equipmentBonuses
+      );
 
     if (luck >= 101) {
       return "special";
@@ -174,10 +279,14 @@ export class StatsSystem {
   // =========================
 
   static getLuckMultiplier(
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): number {
     const luck =
-      characterClass.luck;
+      this.getLuck(
+        characterClass,
+        equipmentBonuses
+      );
 
     if (luck >= 101) {
       return 3;
@@ -204,11 +313,13 @@ export class StatsSystem {
 
   static rollLuck(
     chance: number,
-    characterClass: CharacterClassData
+    characterClass: CharacterClassData,
+    equipmentBonuses: Partial<EquipmentBonuses> = {}
   ): boolean {
     const luckMultiplier =
       this.getLuckMultiplier(
-        characterClass
+        characterClass,
+        equipmentBonuses
       );
 
     const finalChance =

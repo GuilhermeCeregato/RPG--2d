@@ -9,6 +9,7 @@ import { DialogueSystem } from "../systems/DialogueSystem";
 import { InteractionSystem } from "../systems/InteractionSystem";
 import { InventorySystem } from "../systems/Inventory";
 import type { Item } from "../items/Item";
+import { createWarriorEquipment } from "../items/ClassEquipment";
 import {
   CHARACTER_CLASSES,
   CharacterClassId,
@@ -41,6 +42,9 @@ export class GameScene extends Phaser.Scene {
   private xpText!: Phaser.GameObjects.Text;
 
   private sword!: Weapon;
+
+  // Nome escolhido durante o registro
+  private playerName = "";
 
   constructor() {
     super(SCENE_KEYS.GAME);
@@ -202,14 +206,13 @@ export class GameScene extends Phaser.Scene {
         [
           {
             text:
-              "Bem-vindo à Guilda dos Aventureiros. Antes de começar sua jornada, você precisa escolher uma classe.",
+              "Bem-vindo à Guilda dos Aventureiros. Antes de começar sua jornada, você precisa se registrar.",
             nextNode: "node_1",
           },
 
           {
             text:
-              "Escolha com cuidado. Sua classe definirá seus atributos iniciais.",
-            classSelection: true,
+              "Preencha seu registro e escolha a classe que melhor combina com você.",
             action: () => {
               const availableClasses =
                 CHARACTER_CLASSES.filter(
@@ -217,16 +220,55 @@ export class GameScene extends Phaser.Scene {
                     !characterClass.secret
                 );
 
-              this.dialogueSystem.showClassOptions(
+              this.dialogueSystem.startRegistration(
                 availableClasses.map(
                   (characterClass) => ({
                     id: characterClass.id,
                     name: characterClass.name,
+                    description:
+                      characterClass.description,
+
+                    // ========================================
+                    // ATRIBUTOS
+                    // ========================================
+
+                    strength:
+                      characterClass.strength,
+
+                    vitality:
+                      characterClass.vitality,
+
+                    defense:
+                      characterClass.defense,
+
+                    agility:
+                      characterClass.agility,
+
+                    luck:
+                      characterClass.luck,
+
+                    intelligence:
+                      characterClass.intelligence,
+
+                    // ========================================
+                    // PASSIVAS
+                    // ========================================
+
+                    passives:
+                      characterClass.passives,
+
+                    // ========================================
+                    // HABILIDADES
+                    // ========================================
+
+                    abilities:
+                      characterClass.abilities,
                   })
                 ),
-                (classId) => {
-                  this.selectPlayerClass(
-                    classId
+                (registrationData) => {
+                  this.completeRegistration(
+                    registrationData.name,
+                    registrationData.classId
                   );
                 }
               );
@@ -254,9 +296,13 @@ export class GameScene extends Phaser.Scene {
     // INVENTÁRIO
     // ========================================
 
+    // O InventorySystem agora recebe o Player
+    // para poder atualizar os atributos dele
+    // de acordo com os equipamentos.
     this.inventorySystem =
       new InventorySystem(
-        this
+        this,
+        this.player
       );
 
     // ========================================
@@ -339,9 +385,14 @@ export class GameScene extends Phaser.Scene {
     // INVENTÁRIO
     // ========================================
 
-    if (
-      !this.dialogueSystem.isActive()
-    ) {
+    const dialogueActive =
+      this.dialogueSystem.isActive();
+
+    this.inventorySystem.setInputBlocked(
+      dialogueActive
+    );
+
+    if (!dialogueActive) {
       this.inventorySystem.update();
     }
 
@@ -386,17 +437,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ========================================
-  // ESCOLHER CLASSE
+  // REGISTRO DO AVENTUREIRO
   // ========================================
 
-  private selectPlayerClass(
+  private completeRegistration(
+    name: string,
     classId: string
   ): void {
     const validClass =
       CHARACTER_CLASSES.find(
         (characterClass) =>
           characterClass.id ===
-          classId &&
+            classId &&
           !characterClass.secret
       );
 
@@ -413,8 +465,31 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.playerName =
+      name;
+
     this.inventorySystem.setClass(
       validClass.name
+    );
+
+    // ========================================
+    // EQUIPAMENTO INICIAL DA CLASSE
+    // ========================================
+
+    if (
+      validClass.id ===
+      "warrior"
+    ) {
+      const warriorEquipment =
+        createWarriorEquipment();
+
+      this.inventorySystem.addItem(
+        warriorEquipment
+      );
+    }
+
+    console.log(
+      `Aventureiro registrado: ${this.playerName}`
     );
 
     console.log(
@@ -439,6 +514,20 @@ export class GameScene extends Phaser.Scene {
 
     console.log(
       `Sorte: ${validClass.luck}`
+    );
+
+    console.log(
+      `Inteligência: ${validClass.intelligence}`
+    );
+
+    console.log(
+      "Passivas:",
+      validClass.passives
+    );
+
+    console.log(
+      "Habilidades:",
+      validClass.abilities
     );
   }
 
@@ -585,10 +674,6 @@ export class GameScene extends Phaser.Scene {
       rarity,
     } as Item;
 
-    // O ItemDrop já cuida do overlap com o
-    // player, do efeito de coleta e do
-    // destroy(). Aqui só passamos o item, o
-    // player e o callback de coleta.
     new ItemDrop(
       this,
       x,
@@ -678,10 +763,6 @@ export class GameScene extends Phaser.Scene {
   // ========================================
 
   private createHUD(): void {
-    // ========================================
-    // VIDA
-    // ========================================
-
     this.healthBarBackground =
       this.add.rectangle(
         20,
@@ -709,10 +790,6 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(1001);
-
-    // ========================================
-    // STAMINA
-    // ========================================
 
     this.staminaBarBackground =
       this.add.rectangle(
@@ -742,10 +819,6 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1001);
 
-    // ========================================
-    // LEVEL
-    // ========================================
-
     this.levelText =
       this.add.text(
         20,
@@ -761,10 +834,6 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1000);
 
-    // ========================================
-    // XP
-    // ========================================
-
     this.xpText =
       this.add.text(
         20,
@@ -779,10 +848,6 @@ export class GameScene extends Phaser.Scene {
     this.xpText
       .setScrollFactor(0)
       .setDepth(1000);
-
-    // ========================================
-    // COMBATE
-    // ========================================
 
     this.combatText =
       this.add.text(
@@ -808,10 +873,6 @@ export class GameScene extends Phaser.Scene {
       .setDepth(1000)
       .setVisible(false);
   }
-
-  // ========================================
-  // ATUALIZAR HUD
-  // ========================================
 
   private updateHUD(): void {
     const health =
@@ -863,10 +924,6 @@ export class GameScene extends Phaser.Scene {
       `XP: ${currentXP} / ${requiredXP}`
     );
   }
-
-  // ========================================
-  // LEVEL UP
-  // ========================================
 
   private showLevelUpMessage(
     level: number
