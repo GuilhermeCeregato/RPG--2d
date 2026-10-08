@@ -9,7 +9,9 @@ import { DialogueSystem } from "../systems/DialogueSystem";
 import { InteractionSystem } from "../systems/InteractionSystem";
 import { InventorySystem } from "../systems/Inventory";
 import type { Item } from "../items/Item";
-import { createWarriorEquipment } from "../items/ClassEquipment";
+import {
+  createClassStarterEquipment,
+} from "../items/ClassEquipment";
 import {
   CHARACTER_CLASSES,
   CharacterClassId,
@@ -47,7 +49,9 @@ export class GameScene extends Phaser.Scene {
   private playerName = "";
 
   constructor() {
-    super(SCENE_KEYS.GAME);
+    super(
+      SCENE_KEYS.GAME
+    );
   }
 
   create(): void {
@@ -67,13 +71,12 @@ export class GameScene extends Phaser.Scene {
     // PLAYER
     // ========================================
 
-    // Player começa abaixo da Guilda,
-    // longe do slime.
-    this.player = new Player(
-      this,
-      720,
-      400
-    );
+    this.player =
+      new Player(
+        this,
+        720,
+        400
+      );
 
     this.player.setCollideWorldBounds(
       true
@@ -83,15 +86,16 @@ export class GameScene extends Phaser.Scene {
     // ARMA INICIAL
     // ========================================
 
-    this.sword = new Weapon({
-      id: "iron_sword",
-      name: "Espada de Ferro",
-      type: "weapon",
-      description:
-        "Uma espada simples de ferro.",
-      attack: 15,
-      rarity: "common",
-    });
+    this.sword =
+      new Weapon({
+        id: "iron_sword",
+        name: "Espada de Ferro",
+        type: "weapon",
+        description:
+          "Uma espada simples de ferro.",
+        attack: 15,
+        rarity: "common",
+      });
 
     this.player.equipWeapon(
       this.sword
@@ -128,8 +132,6 @@ export class GameScene extends Phaser.Scene {
     // EXPERIÊNCIA
     // ========================================
 
-    // O ExperienceSystem recebe os callbacks
-    // pelo construtor (onExperienceChange, onLevelUp).
     this.experienceSystem =
       new ExperienceSystem(
         undefined,
@@ -161,8 +163,6 @@ export class GameScene extends Phaser.Scene {
     // NPC AVENTUREIRO
     // ========================================
 
-    // O Aventureiro fica em outra região
-    // do mapa, longe da Guilda.
     const npc =
       new NPC(
         this,
@@ -189,14 +189,14 @@ export class GameScene extends Phaser.Scene {
         ]
       );
 
-    this.npcs.push(npc);
+    this.npcs.push(
+      npc
+    );
 
     // ========================================
     // NPC DA GUILDA
     // ========================================
 
-    // O Mestre da Guilda fica dentro da
-    // estrutura física da Guilda.
     const guildNPC =
       new NPC(
         this,
@@ -223,8 +223,12 @@ export class GameScene extends Phaser.Scene {
               this.dialogueSystem.startRegistration(
                 availableClasses.map(
                   (characterClass) => ({
-                    id: characterClass.id,
-                    name: characterClass.name,
+                    id:
+                      characterClass.id,
+
+                    name:
+                      characterClass.name,
+
                     description:
                       characterClass.description,
 
@@ -265,6 +269,7 @@ export class GameScene extends Phaser.Scene {
                       characterClass.abilities,
                   })
                 ),
+
                 (registrationData) => {
                   this.completeRegistration(
                     registrationData.name,
@@ -272,6 +277,18 @@ export class GameScene extends Phaser.Scene {
                   );
                 }
               );
+            },
+          },
+
+          // ========================================
+          // CATÁLOGO DE CLASSES E SUBCLASSES
+          // ========================================
+
+          {
+            text:
+              "Classes e Subclasses",
+            action: () => {
+              this.dialogueSystem.startClassCatalog();
             },
           },
         ]
@@ -296,9 +313,6 @@ export class GameScene extends Phaser.Scene {
     // INVENTÁRIO
     // ========================================
 
-    // O InventorySystem agora recebe o Player
-    // para poder atualizar os atributos dele
-    // de acordo com os equipamentos.
     this.inventorySystem =
       new InventorySystem(
         this,
@@ -309,7 +323,6 @@ export class GameScene extends Phaser.Scene {
     // SLIME
     // ========================================
 
-    // Slime começa bem longe do Player.
     this.spawnSlime(
       1776,
       592
@@ -329,9 +342,6 @@ export class GameScene extends Phaser.Scene {
           return;
         }
 
-        // Player não possui attack().
-        // O ataque é resolvido aqui usando
-        // getAttack() e enemy.takeDamage().
         this.handlePlayerAttack();
       }
     );
@@ -362,7 +372,6 @@ export class GameScene extends Phaser.Scene {
         enemy.active &&
         enemy.visible
       ) {
-        // O alvo já foi definido com setTarget()
         enemy.update();
       }
     }
@@ -408,7 +417,8 @@ export class GameScene extends Phaser.Scene {
 
       this.combatText.setText(
         `EM COMBATE\n${Math.ceil(
-          this.combatTimer / 1000
+          this.combatTimer /
+            1000
         )}s`
       );
 
@@ -476,17 +486,24 @@ export class GameScene extends Phaser.Scene {
     // EQUIPAMENTO INICIAL DA CLASSE
     // ========================================
 
-    if (
-      validClass.id ===
-      "warrior"
-    ) {
-      const warriorEquipment =
-        createWarriorEquipment();
+    const starterEquipment =
+      createClassStarterEquipment(
+        validClass.id
+      );
 
+    if (starterEquipment) {
       this.inventorySystem.addItem(
-        warriorEquipment
+        starterEquipment
+      );
+
+      console.log(
+        `Equipamento inicial recebido: ${starterEquipment.name}`
       );
     }
+
+    // ========================================
+    // INFORMAÇÕES DO REGISTRO
+    // ========================================
 
     console.log(
       `Aventureiro registrado: ${this.playerName}`
@@ -564,7 +581,9 @@ export class GameScene extends Phaser.Scene {
       this.player
     );
 
-    this.enemies.push(slime);
+    this.enemies.push(
+      slime
+    );
 
     slime.onDefeated = () => {
       this.handleEnemyDefeated(
@@ -592,8 +611,13 @@ export class GameScene extends Phaser.Scene {
       enemy.y
     );
 
-    enemy.setActive(false);
-    enemy.setVisible(false);
+    enemy.setActive(
+      false
+    );
+
+    enemy.setVisible(
+      false
+    );
 
     const body =
       enemy.body as
@@ -601,11 +625,13 @@ export class GameScene extends Phaser.Scene {
         | null;
 
     if (body) {
-      body.enable = false;
+      body.enable =
+        false;
     }
 
     enemy.respawnAt =
-      this.time.now + 5000;
+      this.time.now +
+      5000;
   }
 
   // ========================================
@@ -620,7 +646,9 @@ export class GameScene extends Phaser.Scene {
       Math.random();
 
     let textureKey: string;
+
     let itemName: string;
+
     let rarity:
       | "common"
       | "uncommon"
@@ -628,7 +656,9 @@ export class GameScene extends Phaser.Scene {
       | "epic"
       | "legendary";
 
-    if (random < 0.75) {
+    if (
+      random < 0.75
+    ) {
       textureKey =
         "slime_gel";
 
@@ -700,7 +730,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const attackRange = 60;
+    const attackRange =
+      60;
 
     for (
       const enemy of this.enemies
@@ -720,7 +751,10 @@ export class GameScene extends Phaser.Scene {
           enemy.y
         );
 
-      if (distance <= attackRange) {
+      if (
+        distance <=
+        attackRange
+      ) {
         enemy.takeDamage(
           this.player.getAttack()
         );
@@ -741,8 +775,10 @@ export class GameScene extends Phaser.Scene {
       const enemy of this.enemies
     ) {
       if (
-        enemy.respawnAt !== undefined &&
-        time >= enemy.respawnAt
+        enemy.respawnAt !==
+          undefined &&
+        time >=
+          enemy.respawnAt
       ) {
         enemy.resetEnemy();
 
@@ -782,14 +818,28 @@ export class GameScene extends Phaser.Scene {
       );
 
     this.healthBarBackground
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(1000);
+      .setOrigin(
+        0,
+        0
+      )
+      .setScrollFactor(
+        0
+      )
+      .setDepth(
+        1000
+      );
 
     this.healthBar
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(1001);
+      .setOrigin(
+        0,
+        0
+      )
+      .setScrollFactor(
+        0
+      )
+      .setDepth(
+        1001
+      );
 
     this.staminaBarBackground =
       this.add.rectangle(
@@ -810,14 +860,28 @@ export class GameScene extends Phaser.Scene {
       );
 
     this.staminaBarBackground
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(1000);
+      .setOrigin(
+        0,
+        0
+      )
+      .setScrollFactor(
+        0
+      )
+      .setDepth(
+        1000
+      );
 
     this.staminaBar
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(1001);
+      .setOrigin(
+        0,
+        0
+      )
+      .setScrollFactor(
+        0
+      )
+      .setDepth(
+        1001
+      );
 
     this.levelText =
       this.add.text(
@@ -825,14 +889,20 @@ export class GameScene extends Phaser.Scene {
         65,
         "Nível 1",
         {
-          fontSize: "16px",
-          color: "#ffffff",
+          fontSize:
+            "16px",
+          color:
+            "#ffffff",
         }
       );
 
     this.levelText
-      .setScrollFactor(0)
-      .setDepth(1000);
+      .setScrollFactor(
+        0
+      )
+      .setDepth(
+        1000
+      );
 
     this.xpText =
       this.add.text(
@@ -840,14 +910,20 @@ export class GameScene extends Phaser.Scene {
         88,
         "XP: 0 / 100",
         {
-          fontSize: "13px",
-          color: "#ffffff",
+          fontSize:
+            "13px",
+          color:
+            "#ffffff",
         }
       );
 
     this.xpText
-      .setScrollFactor(0)
-      .setDepth(1000);
+      .setScrollFactor(
+        0
+      )
+      .setDepth(
+        1000
+      );
 
     this.combatText =
       this.add.text(
@@ -855,9 +931,12 @@ export class GameScene extends Phaser.Scene {
         30,
         "",
         {
-          fontSize: "16px",
-          color: "#ff5555",
-          align: "center",
+          fontSize:
+            "16px",
+          color:
+            "#ff5555",
+          align:
+            "center",
           backgroundColor:
             "#000000",
           padding: {
@@ -868,10 +947,19 @@ export class GameScene extends Phaser.Scene {
       );
 
     this.combatText
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(1000)
-      .setVisible(false);
+      .setOrigin(
+        0.5,
+        0
+      )
+      .setScrollFactor(
+        0
+      )
+      .setDepth(
+        1000
+      )
+      .setVisible(
+        false
+      );
   }
 
   private updateHUD(): void {
@@ -883,13 +971,15 @@ export class GameScene extends Phaser.Scene {
 
     const healthPercent =
       Phaser.Math.Clamp(
-        health / maxHealth,
+        health /
+          maxHealth,
         0,
         1
       );
 
     this.healthBar.width =
-      220 * healthPercent;
+      220 *
+      healthPercent;
 
     const stamina =
       this.player.stamina;
@@ -899,13 +989,15 @@ export class GameScene extends Phaser.Scene {
 
     const staminaPercent =
       Phaser.Math.Clamp(
-        stamina / maxStamina,
+        stamina /
+          maxStamina,
         0,
         1
       );
 
     this.staminaBar.width =
-      220 * staminaPercent;
+      220 *
+      staminaPercent;
 
     const level =
       this.experienceSystem.getLevel();
@@ -930,28 +1022,45 @@ export class GameScene extends Phaser.Scene {
   ): void {
     const text =
       this.add.text(
-        this.scale.width / 2,
-        this.scale.height / 2 - 80,
+        this.scale.width /
+          2,
+        this.scale.height /
+            2 -
+          80,
         `LEVEL UP!\nNível ${level}`,
         {
-          fontSize: "32px",
-          color: "#ffd700",
-          align: "center",
-          stroke: "#000000",
-          strokeThickness: 5,
+          fontSize:
+            "32px",
+          color:
+            "#ffd700",
+          align:
+            "center",
+          stroke:
+            "#000000",
+          strokeThickness:
+            5,
         }
       );
 
     text
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2000);
+      .setOrigin(
+        0.5
+      )
+      .setScrollFactor(
+        0
+      )
+      .setDepth(
+        2000
+      );
 
     this.tweens.add({
       targets: text,
       alpha: 0,
-      y: text.y - 50,
-      duration: 1800,
+      y:
+        text.y - 50,
+      duration:
+        1800,
+
       onComplete: () => {
         text.destroy();
       },

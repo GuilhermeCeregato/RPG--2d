@@ -6,6 +6,12 @@ import {
   drawClassFront,
 } from "../entities/ClassAccessories";
 
+import {
+  PUBLIC_CLASS_CATALOG,
+  ClassCatalogEntry,
+  ClassSubclass,
+} from "../data/ClassCatalog";
+
 export interface DialogueChoice {
   text: string;
   nextNode?: string;
@@ -75,6 +81,17 @@ const PREVIEW_SIZE = 120;
 const CLASS_ICON_X = 150;
 const CLASS_ICON_Y = 215;
 
+// ========================================
+// CATÁLOGO DE CLASSES
+// ========================================
+
+const CATALOG_DEPTH = 5000;
+
+const CATALOG_W = 1120;
+const CATALOG_H = 650;
+
+const CATALOG_CLASSES_PER_PAGE = 12;
+
 export class DialogueSystem {
   private scene: Phaser.Scene;
 
@@ -114,7 +131,6 @@ export class DialogueSystem {
 
   private registrationContainer!: Phaser.GameObjects.Container;
 
-  // Painel da classe selecionada
   private selectedClassPanel!: Phaser.GameObjects.Rectangle;
   private selectedClassName!: Phaser.GameObjects.Text;
   private selectedClassDescription!: Phaser.GameObjects.Text;
@@ -124,24 +140,19 @@ export class DialogueSystem {
   private selectedClassIcon!: Phaser.GameObjects.Graphics;
   private selectedClassIconText!: Phaser.GameObjects.Text;
 
-  // Lista de classes
   private registrationClassButtons: Phaser.GameObjects.Rectangle[] = [];
   private registrationClassTexts: Phaser.GameObjects.Text[] = [];
   private registrationClassArrows: Phaser.GameObjects.Text[] = [];
 
-  // Prévia do personagem
   private characterIcon!: Phaser.GameObjects.Graphics;
   private characterModificationText!: Phaser.GameObjects.Text;
 
-  // Nome
   private registrationNameInput!: Phaser.GameObjects.Rectangle;
   private registrationNameText!: Phaser.GameObjects.Text;
 
-  // Botões
   private registrationButton!: Phaser.GameObjects.Rectangle;
   private registrationCancelButton!: Phaser.GameObjects.Text;
 
-  // Dados do registro
   private registrationClasses: RegistrationClass[] = [];
 
   private selectedRegistrationClass: RegistrationClass | null = null;
@@ -170,6 +181,58 @@ export class DialogueSystem {
   private playerName = "";
 
   // ========================================
+  // CATÁLOGO
+  // ========================================
+
+  private catalogMode = false;
+
+  private catalogContainer!: Phaser.GameObjects.Container;
+
+  private catalogTitle!: Phaser.GameObjects.Text;
+  private catalogSubtitle!: Phaser.GameObjects.Text;
+
+  private catalogClassListTitle!: Phaser.GameObjects.Text;
+  private catalogClassListContainer!: Phaser.GameObjects.Container;
+
+  private catalogDetailsTitle!: Phaser.GameObjects.Text;
+  private catalogDetailsText!: Phaser.GameObjects.Text;
+
+  private catalogBackButton!: Phaser.GameObjects.Text;
+  private catalogCloseButton!: Phaser.GameObjects.Text;
+
+  private catalogPreviousButton!: Phaser.GameObjects.Text;
+  private catalogNextButton!: Phaser.GameObjects.Text;
+  private catalogPageText!: Phaser.GameObjects.Text;
+
+  private catalogClasses: ClassCatalogEntry[] =
+    PUBLIC_CLASS_CATALOG;
+
+  private catalogPage = 0;
+
+  private selectedCatalogClass: ClassCatalogEntry | null =
+    null;
+
+  private selectedCatalogSubclass: ClassSubclass | null =
+    null;
+
+  private catalogView:
+    | "classes"
+    | "subclasses"
+    | "references" = "classes";
+
+  private catalogClassButtons: Phaser.GameObjects.Rectangle[] =
+    [];
+
+  private catalogClassTexts: Phaser.GameObjects.Text[] =
+    [];
+
+  private catalogSubclassButtons: Phaser.GameObjects.Rectangle[] =
+    [];
+
+  private catalogSubclassTexts: Phaser.GameObjects.Text[] =
+    [];
+
+  // ========================================
   // TECLAS
   // ========================================
 
@@ -180,6 +243,8 @@ export class DialogueSystem {
   private backspaceKey!: Phaser.Input.Keyboard.Key;
 
   private enterKey!: Phaser.Input.Keyboard.Key;
+
+  private escapeKey!: Phaser.Input.Keyboard.Key;
 
   // ========================================
   // CALLBACKS
@@ -206,6 +271,10 @@ export class DialogueSystem {
 
     this.enterKey = scene.input.keyboard!.addKey(
       Phaser.Input.Keyboard.KeyCodes.ENTER
+    );
+
+    this.escapeKey = scene.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.ESC
     );
 
     this.numberKeys = [
@@ -376,6 +445,12 @@ export class DialogueSystem {
     // ========================================
 
     this.createRegistrationUI();
+
+    // ========================================
+    // CATÁLOGO
+    // ========================================
+
+    this.createCatalogUI();
   }
 
   // ========================================
@@ -405,10 +480,6 @@ export class DialogueSystem {
       .setVisible(false);
 
     this.registrationContainer = container;
-
-    // ========================================
-    // AJUDANTES
-    // ========================================
 
     const box = (
       x: number,
@@ -502,10 +573,6 @@ export class DialogueSystem {
       0x4d4d4d
     );
 
-    // ========================================
-    // ÍCONE DA CLASSE
-    // ========================================
-
     box(
       40,
       85,
@@ -534,10 +601,6 @@ export class DialogueSystem {
         }
       );
 
-    // ========================================
-    // NOME DA CLASSE
-    // ========================================
-
     this.selectedClassName =
       label(
         445,
@@ -553,10 +616,6 @@ export class DialogueSystem {
           },
         }
       );
-
-    // ========================================
-    // DESCRIÇÃO
-    // ========================================
 
     this.selectedClassDescription =
       label(
@@ -576,10 +635,6 @@ export class DialogueSystem {
         0.5,
         0
       );
-
-    // ========================================
-    // ATRIBUTOS
-    // ========================================
 
     label(
       445,
@@ -610,10 +665,6 @@ export class DialogueSystem {
         0
       );
 
-    // ========================================
-    // PASSIVAS
-    // ========================================
-
     label(
       445,
       242,
@@ -643,10 +694,6 @@ export class DialogueSystem {
         0.5,
         0
       );
-
-    // ========================================
-    // HABILIDADES
-    // ========================================
 
     label(
       445,
@@ -679,7 +726,7 @@ export class DialogueSystem {
       );
 
     // ========================================
-    // PAINEL DA LISTA DE CLASSES
+    // LISTA DE CLASSES
     // ========================================
 
     box(
@@ -703,7 +750,7 @@ export class DialogueSystem {
     );
 
     // ========================================
-    // PAINEL DIREITO - PRÉVIA
+    // PAINEL DIREITO
     // ========================================
 
     box(
@@ -726,10 +773,6 @@ export class DialogueSystem {
       }
     );
 
-    // ========================================
-    // ÁREA DO PERSONAGEM
-    // ========================================
-
     box(
       665,
       110,
@@ -745,10 +788,6 @@ export class DialogueSystem {
     container.add(
       this.characterIcon
     );
-
-    // ========================================
-    // MODIFICAÇÕES
-    // ========================================
 
     label(
       905,
@@ -945,6 +984,1290 @@ export class DialogueSystem {
   }
 
   // ========================================
+  // CRIAR UI DO CATÁLOGO
+  // ========================================
+
+  private createCatalogUI(): void {
+    const scene = this.scene;
+
+    const width = scene.scale.width;
+    const height = scene.scale.height;
+
+    const scale = Math.min(
+      1,
+      (width - 30) / CATALOG_W,
+      (height - 30) / CATALOG_H
+    );
+
+    const container = scene.add
+      .container(
+        width / 2 - (CATALOG_W * scale) / 2,
+        height / 2 - (CATALOG_H * scale) / 2
+      )
+      .setScale(scale)
+      .setScrollFactor(0)
+      .setDepth(CATALOG_DEPTH)
+      .setVisible(false);
+
+    this.catalogContainer = container;
+
+    const box = (
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      fill: number,
+      border: number,
+      borderWidth = 1
+    ): Phaser.GameObjects.Rectangle => {
+      const rectangle = scene.add
+        .rectangle(
+          x,
+          y,
+          w,
+          h,
+          fill,
+          1
+        )
+        .setOrigin(0, 0)
+        .setStrokeStyle(
+          borderWidth,
+          border
+        );
+
+      container.add(rectangle);
+
+      return rectangle;
+    };
+
+    const text = (
+      x: number,
+      y: number,
+      value: string,
+      style: Phaser.Types.GameObjects.Text.TextStyle,
+      originX = 0.5,
+      originY = 0.5
+    ): Phaser.GameObjects.Text => {
+      const object = scene.add
+        .text(
+          x,
+          y,
+          value,
+          style
+        )
+        .setOrigin(
+          originX,
+          originY
+        );
+
+      container.add(object);
+
+      return object;
+    };
+
+    // ========================================
+    // FUNDO
+    // ========================================
+
+    box(
+      0,
+      0,
+      CATALOG_W,
+      CATALOG_H,
+      0x0c0c0c,
+      0x666666,
+      2
+    );
+
+    // ========================================
+    // TÍTULO
+    // ========================================
+
+    this.catalogTitle = text(
+      CATALOG_W / 2,
+      30,
+      "CLASSES E SUBCLASSES",
+      {
+        fontSize: "25px",
+        color: "#ffd700",
+        fontStyle: "bold",
+      }
+    );
+
+    this.catalogSubtitle = text(
+      CATALOG_W / 2,
+      57,
+      "Conheça os caminhos disponíveis para os aventureiros.",
+      {
+        fontSize: "11px",
+        color: "#999999",
+      }
+    );
+
+    // ========================================
+    // PAINEL ESQUERDO
+    // ========================================
+
+    box(
+      25,
+      85,
+      390,
+      500,
+      0x151515,
+      0x444444
+    );
+
+    this.catalogClassListTitle = text(
+      220,
+      108,
+      "CLASSES",
+      {
+        fontSize: "16px",
+        color: "#ffd700",
+        fontStyle: "bold",
+      }
+    );
+
+    this.catalogClassListContainer =
+      scene.add.container(
+        0,
+        0
+      );
+
+    container.add(
+      this.catalogClassListContainer
+    );
+
+    // ========================================
+    // PAINEL DIREITO
+    // ========================================
+
+    box(
+      435,
+      85,
+      660,
+      500,
+      0x151515,
+      0x444444
+    );
+
+    this.catalogDetailsTitle = text(
+      765,
+      112,
+      "SELECIONE UMA CLASSE",
+      {
+        fontSize: "20px",
+        color: "#ffd700",
+        fontStyle: "bold",
+      }
+    );
+
+    this.catalogDetailsText = text(
+      765,
+      150,
+      "Escolha uma classe à esquerda para visualizar suas subclasses.",
+      {
+        fontSize: "13px",
+        color: "#dddddd",
+        align: "center",
+        wordWrap: {
+          width: 580,
+        },
+        lineSpacing: 5,
+      },
+      0.5,
+      0
+    );
+
+    // ========================================
+    // BOTÃO VOLTAR
+    // ========================================
+
+    this.catalogBackButton = text(
+      470,
+      615,
+      "‹ VOLTAR",
+      {
+        fontSize: "14px",
+        color: "#999999",
+        fontStyle: "bold",
+      },
+      0,
+      0.5
+    );
+
+    this.catalogBackButton.setInteractive({
+      useHandCursor: true,
+    });
+
+    this.catalogBackButton.on(
+      "pointerover",
+      () => {
+        this.catalogBackButton.setColor(
+          "#ffffff"
+        );
+      }
+    );
+
+    this.catalogBackButton.on(
+      "pointerout",
+      () => {
+        this.catalogBackButton.setColor(
+          "#999999"
+        );
+      }
+    );
+
+    this.catalogBackButton.on(
+      "pointerdown",
+      () => {
+        this.catalogBack();
+      }
+    );
+
+    // ========================================
+    // BOTÃO FECHAR
+    // ========================================
+
+    this.catalogCloseButton = text(
+      1060,
+      615,
+      "FECHAR",
+      {
+        fontSize: "14px",
+        color: "#999999",
+        fontStyle: "bold",
+      },
+      1,
+      0.5
+    );
+
+    this.catalogCloseButton.setInteractive({
+      useHandCursor: true,
+    });
+
+    this.catalogCloseButton.on(
+      "pointerover",
+      () => {
+        this.catalogCloseButton.setColor(
+          "#ffffff"
+        );
+      }
+    );
+
+    this.catalogCloseButton.on(
+      "pointerout",
+      () => {
+        this.catalogCloseButton.setColor(
+          "#999999"
+        );
+      }
+    );
+
+    this.catalogCloseButton.on(
+      "pointerdown",
+      () => {
+        this.close();
+      }
+    );
+
+    // ========================================
+    // PAGINAÇÃO
+    // ========================================
+
+    this.catalogPreviousButton = text(
+      55,
+      615,
+      "‹",
+      {
+        fontSize: "22px",
+        color: "#999999",
+        fontStyle: "bold",
+      }
+    );
+
+    this.catalogPreviousButton.setInteractive({
+      useHandCursor: true,
+    });
+
+    this.catalogPreviousButton.on(
+      "pointerover",
+      () => {
+        this.catalogPreviousButton.setColor(
+          "#ffffff"
+        );
+      }
+    );
+
+    this.catalogPreviousButton.on(
+      "pointerout",
+      () => {
+        this.catalogPreviousButton.setColor(
+          "#999999"
+        );
+      }
+    );
+
+    this.catalogPreviousButton.on(
+      "pointerdown",
+      () => {
+        this.changeCatalogPage(-1);
+      }
+    );
+
+    this.catalogPageText = text(
+      220,
+      615,
+      "1 / 1",
+      {
+        fontSize: "12px",
+        color: "#aaaaaa",
+      }
+    );
+
+    this.catalogNextButton = text(
+      385,
+      615,
+      "›",
+      {
+        fontSize: "22px",
+        color: "#999999",
+        fontStyle: "bold",
+      }
+    );
+
+    this.catalogNextButton.setInteractive({
+      useHandCursor: true,
+    });
+
+    this.catalogNextButton.on(
+      "pointerover",
+      () => {
+        this.catalogNextButton.setColor(
+          "#ffffff"
+        );
+      }
+    );
+
+    this.catalogNextButton.on(
+      "pointerout",
+      () => {
+        this.catalogNextButton.setColor(
+          "#999999"
+        );
+      }
+    );
+
+    this.catalogNextButton.on(
+      "pointerdown",
+      () => {
+        this.changeCatalogPage(1);
+      }
+    );
+  }
+
+  // ========================================
+  // INICIAR CATÁLOGO
+  // ========================================
+
+  startClassCatalog(): void {
+    /*
+     * IMPORTANTE:
+     * O catálogo pode ser aberto enquanto o diálogo
+     * está ativo. Não chamamos close() aqui porque isso
+     * apagaria o estado antes de abrir o catálogo.
+     */
+
+    this.active = true;
+    this.catalogMode = true;
+
+    this.registrationMode = false;
+    this.inputMode = false;
+    this.classSelectionMode = false;
+
+    this.catalogClasses =
+      PUBLIC_CLASS_CATALOG;
+
+    this.catalogPage = 0;
+
+    this.selectedCatalogClass =
+      null;
+
+    this.selectedCatalogSubclass =
+      null;
+
+    this.catalogView =
+      "classes";
+
+    // ========================================
+    // ESCONDER DIÁLOGO
+    // ========================================
+
+    this.dialogueBox.setVisible(
+      false
+    );
+
+    this.dialogueName.setVisible(
+      false
+    );
+
+    this.dialogueText.setVisible(
+      false
+    );
+
+    this.continueText.setVisible(
+      false
+    );
+
+    this.clearChoices();
+
+    // ========================================
+    // MOSTRAR CATÁLOGO
+    // ========================================
+
+    this.catalogContainer.setVisible(
+      true
+    );
+
+    this.updateCatalog();
+  }
+
+  // ========================================
+  // UPDATE DO CATÁLOGO
+  // ========================================
+
+  private updateCatalog(): void {
+    if (!this.catalogMode) {
+      return;
+    }
+
+    this.clearCatalogClassButtons();
+
+    this.clearCatalogSubclassButtons();
+
+    if (
+      this.catalogView ===
+      "classes"
+    ) {
+      this.showCatalogClasses();
+
+      return;
+    }
+
+    if (
+      this.catalogView ===
+      "subclasses"
+    ) {
+      this.showCatalogSubclasses();
+
+      return;
+    }
+
+    this.showCatalogReferences();
+  }
+
+  // ========================================
+  // MOSTRAR CLASSES
+  // ========================================
+
+  private showCatalogClasses(): void {
+    this.catalogTitle.setText(
+      "CLASSES E SUBCLASSES"
+    );
+
+    this.catalogSubtitle.setText(
+      "Selecione uma classe para conhecer seus caminhos."
+    );
+
+    this.catalogClassListTitle.setText(
+      "CLASSES DISPONÍVEIS"
+    );
+
+    this.catalogDetailsTitle.setText(
+      "SELECIONE UMA CLASSE"
+    );
+
+    this.catalogDetailsText.setText(
+      "Escolha uma classe à esquerda para visualizar suas subclasses."
+    );
+
+    this.catalogBackButton.setVisible(
+      false
+    );
+
+    const totalPages =
+      Math.max(
+        1,
+        Math.ceil(
+          this.catalogClasses.length /
+            CATALOG_CLASSES_PER_PAGE
+        )
+      );
+
+    const start =
+      this.catalogPage *
+      CATALOG_CLASSES_PER_PAGE;
+
+    const end =
+      Math.min(
+        start +
+          CATALOG_CLASSES_PER_PAGE,
+        this.catalogClasses.length
+      );
+
+    const pageClasses =
+      this.catalogClasses.slice(
+        start,
+        end
+      );
+
+    pageClasses.forEach(
+      (
+        characterClass,
+        index
+      ) => {
+        this.createCatalogClassButton(
+          characterClass,
+          index
+        );
+      }
+    );
+
+    this.catalogPageText.setText(
+      `${this.catalogPage + 1} / ${totalPages}`
+    );
+
+    this.catalogPreviousButton.setVisible(
+      this.catalogPage > 0
+    );
+
+    this.catalogNextButton.setVisible(
+      this.catalogPage <
+        totalPages - 1
+    );
+
+    this.catalogPageText.setVisible(
+      true
+    );
+  }
+
+  // ========================================
+  // BOTÃO DE CLASSE
+  // ========================================
+
+  private createCatalogClassButton(
+    characterClass: ClassCatalogEntry,
+    index: number
+  ): void {
+    const buttonWidth = 350;
+    const buttonHeight = 31;
+
+    const x = 45;
+    const y =
+      135 +
+      index *
+        35;
+
+    const button =
+      this.scene.add
+        .rectangle(
+          x,
+          y,
+          buttonWidth,
+          buttonHeight,
+          0x1b1b1b,
+          1
+        )
+        .setOrigin(0, 0)
+        .setStrokeStyle(
+          1,
+          0x444444
+        )
+        .setInteractive({
+          useHandCursor: true,
+        });
+
+    const text =
+      this.scene.add
+        .text(
+          x + 15,
+          y +
+            buttonHeight / 2,
+          characterClass.name,
+          {
+            fontSize: "12px",
+            color: "#ffffff",
+            fontStyle: "bold",
+          }
+        )
+        .setOrigin(
+          0,
+          0.5
+        );
+
+    const arrow =
+      this.scene.add
+        .text(
+          x +
+            buttonWidth -
+            16,
+          y +
+            buttonHeight / 2,
+          "›",
+          {
+            fontSize: "17px",
+            color: "#777777",
+          }
+        )
+        .setOrigin(0.5);
+
+    this.catalogContainer.add(
+      [
+        button,
+        text,
+        arrow,
+      ]
+    );
+
+    button.on(
+      "pointerover",
+      () => {
+        button.setFillStyle(
+          0x292929
+        );
+
+        button.setStrokeStyle(
+          1,
+          0xd4a017
+        );
+
+        text.setColor(
+          "#ffd700"
+        );
+
+        arrow.setColor(
+          "#ffd700"
+        );
+      }
+    );
+
+    button.on(
+      "pointerout",
+      () => {
+        button.setFillStyle(
+          0x1b1b1b
+        );
+
+        button.setStrokeStyle(
+          1,
+          0x444444
+        );
+
+        text.setColor(
+          "#ffffff"
+        );
+
+        arrow.setColor(
+          "#777777"
+        );
+      }
+    );
+
+    button.on(
+      "pointerdown",
+      () => {
+        this.selectCatalogClass(
+          characterClass
+        );
+      }
+    );
+
+    this.catalogClassButtons.push(
+      button
+    );
+
+    this.catalogClassTexts.push(
+      text
+    );
+  }
+
+  // ========================================
+  // SELECIONAR CLASSE DO CATÁLOGO
+  // ========================================
+
+  private selectCatalogClass(
+    characterClass: ClassCatalogEntry
+  ): void {
+    this.selectedCatalogClass =
+      characterClass;
+
+    this.selectedCatalogSubclass =
+      null;
+
+    this.catalogView =
+      "subclasses";
+
+    this.updateCatalog();
+  }
+
+  // ========================================
+  // MOSTRAR SUBCLASSES
+  // ========================================
+
+  private showCatalogSubclasses(): void {
+    if (
+      !this.selectedCatalogClass
+    ) {
+      this.catalogView =
+        "classes";
+
+      this.updateCatalog();
+
+      return;
+    }
+
+    const characterClass =
+      this.selectedCatalogClass;
+
+    this.catalogTitle.setText(
+      characterClass.name
+    );
+
+    this.catalogSubtitle.setText(
+      "Escolha uma subclasse para conhecer seus personagens de referência."
+    );
+
+    this.catalogClassListTitle.setText(
+      "SUBCLASSES"
+    );
+
+    this.catalogDetailsTitle.setText(
+      characterClass.name
+    );
+
+    this.catalogDetailsText.setText(
+      characterClass.description
+    );
+
+    this.catalogBackButton.setVisible(
+      true
+    );
+
+    this.catalogPreviousButton.setVisible(
+      false
+    );
+
+    this.catalogNextButton.setVisible(
+      false
+    );
+
+    this.catalogPageText.setVisible(
+      false
+    );
+
+    if (
+      characterClass.subclasses.length === 0
+    ) {
+      const emptyText =
+        this.scene.add
+          .text(
+            60,
+            145,
+            "Nenhuma subclasse cadastrada.",
+            {
+              fontSize: "12px",
+              color: "#999999",
+            }
+          )
+          .setOrigin(0, 0);
+
+      this.catalogContainer.add(
+        emptyText
+      );
+
+      return;
+    }
+
+    characterClass.subclasses.forEach(
+      (
+        subclass,
+        index
+      ) => {
+        this.createCatalogSubclassButton(
+          subclass,
+          index
+        );
+      }
+    );
+  }
+
+  // ========================================
+  // BOTÃO DE SUBCLASSE
+  // ========================================
+
+  private createCatalogSubclassButton(
+    subclass: ClassSubclass,
+    index: number
+  ): void {
+    const buttonWidth = 350;
+    const buttonHeight = 45;
+
+    const x = 45;
+    const y =
+      135 +
+      index *
+        54;
+
+    const button =
+      this.scene.add
+        .rectangle(
+          x,
+          y,
+          buttonWidth,
+          buttonHeight,
+          0x1b1b1b,
+          1
+        )
+        .setOrigin(0, 0)
+        .setStrokeStyle(
+          1,
+          0x444444
+        )
+        .setInteractive({
+          useHandCursor: true,
+        });
+
+    const text =
+      this.scene.add
+        .text(
+          x + 15,
+          y +
+            buttonHeight / 2,
+          subclass.name,
+          {
+            fontSize: "12px",
+            color: "#ffffff",
+            fontStyle: "bold",
+            wordWrap: {
+              width: 285,
+            },
+          }
+        )
+        .setOrigin(
+          0,
+          0.5
+        );
+
+    const arrow =
+      this.scene.add
+        .text(
+          x +
+            buttonWidth -
+            16,
+          y +
+            buttonHeight / 2,
+          "›",
+          {
+            fontSize: "17px",
+            color: "#777777",
+          }
+        )
+        .setOrigin(0.5);
+
+    this.catalogContainer.add(
+      [
+        button,
+        text,
+        arrow,
+      ]
+    );
+
+    button.on(
+      "pointerover",
+      () => {
+        button.setFillStyle(
+          0x292929
+        );
+
+        button.setStrokeStyle(
+          1,
+          0xd4a017
+        );
+
+        text.setColor(
+          "#ffd700"
+        );
+
+        arrow.setColor(
+          "#ffd700"
+        );
+      }
+    );
+
+    button.on(
+      "pointerout",
+      () => {
+        button.setFillStyle(
+          0x1b1b1b
+        );
+
+        button.setStrokeStyle(
+          1,
+          0x444444
+        );
+
+        text.setColor(
+          "#ffffff"
+        );
+
+        arrow.setColor(
+          "#777777"
+        );
+      }
+    );
+
+    button.on(
+      "pointerdown",
+      () => {
+        this.selectCatalogSubclass(
+          subclass
+        );
+      }
+    );
+
+    this.catalogSubclassButtons.push(
+      button
+    );
+
+    this.catalogSubclassTexts.push(
+      text
+    );
+  }
+
+  // ========================================
+  // SELECIONAR SUBCLASSE
+  // ========================================
+
+  private selectCatalogSubclass(
+    subclass: ClassSubclass
+  ): void {
+    this.selectedCatalogSubclass =
+      subclass;
+
+    this.catalogView =
+      "references";
+
+    this.updateCatalog();
+  }
+
+  // ========================================
+  // MOSTRAR REFERÊNCIAS
+  // ========================================
+
+  private showCatalogReferences(): void {
+    if (
+      !this.selectedCatalogClass ||
+      !this.selectedCatalogSubclass
+    ) {
+      this.catalogView =
+        "classes";
+
+      this.updateCatalog();
+
+      return;
+    }
+
+    const characterClass =
+      this.selectedCatalogClass;
+
+    const subclass =
+      this.selectedCatalogSubclass;
+
+    this.catalogTitle.setText(
+      subclass.name
+    );
+
+    this.catalogSubtitle.setText(
+      `${characterClass.name} • Personagens de referência`
+    );
+
+    this.catalogClassListTitle.setText(
+      "REFERÊNCIAS"
+    );
+
+    this.catalogDetailsTitle.setText(
+      subclass.name
+    );
+
+    const referenceText =
+      subclass.references
+        .map(
+          (reference) => {
+            const characters =
+              reference.characters
+                .map(
+                  (character) =>
+                    `• ${character}`
+                )
+                .join("\n");
+
+            return (
+              `${reference.franchise}\n` +
+              characters
+            );
+          }
+        )
+        .join("\n\n");
+
+    this.catalogDetailsText.setText(
+      referenceText ||
+        "Nenhuma referência cadastrada."
+    );
+
+    this.catalogBackButton.setVisible(
+      true
+    );
+
+    this.catalogPreviousButton.setVisible(
+      false
+    );
+
+    this.catalogNextButton.setVisible(
+      false
+    );
+
+    this.catalogPageText.setVisible(
+      false
+    );
+
+    this.createReferenceEntries(
+      subclass
+    );
+  }
+
+  // ========================================
+  // ENTRADAS DE REFERÊNCIA
+  // ========================================
+
+  private createReferenceEntries(
+    subclass: ClassSubclass
+  ): void {
+    let y = 135;
+
+    subclass.references.forEach(
+      (reference) => {
+        if (y > 540) {
+          return;
+        }
+
+        const franchiseText =
+          this.scene.add
+            .text(
+              60,
+              y,
+              reference.franchise,
+              {
+                fontSize: "11px",
+                color: "#d4a017",
+                fontStyle: "bold",
+              }
+            )
+            .setOrigin(
+              0,
+              0
+            );
+
+        this.catalogContainer.add(
+          franchiseText
+        );
+
+        y += 22;
+
+        reference.characters.forEach(
+          (character) => {
+            if (y > 555) {
+              return;
+            }
+
+            const characterText =
+              this.scene.add
+                .text(
+                  65,
+                  y,
+                  `• ${character}`,
+                  {
+                    fontSize: "11px",
+                    color: "#dddddd",
+                    wordWrap: {
+                      width: 320,
+                    },
+                  }
+                )
+                .setOrigin(
+                  0,
+                  0
+                );
+
+            this.catalogContainer.add(
+              characterText
+            );
+
+            y += 20;
+          }
+        );
+
+        y += 12;
+      }
+    );
+  }
+
+  // ========================================
+  // PAGINAÇÃO
+  // ========================================
+
+  private changeCatalogPage(
+    direction: number
+  ): void {
+    if (
+      this.catalogView !==
+      "classes"
+    ) {
+      return;
+    }
+
+    const totalPages =
+      Math.max(
+        1,
+        Math.ceil(
+          this.catalogClasses.length /
+            CATALOG_CLASSES_PER_PAGE
+        )
+      );
+
+    this.catalogPage +=
+      direction;
+
+    if (
+      this.catalogPage < 0
+    ) {
+      this.catalogPage = 0;
+    }
+
+    if (
+      this.catalogPage >=
+      totalPages
+    ) {
+      this.catalogPage =
+        totalPages - 1;
+    }
+
+    this.updateCatalog();
+  }
+
+  // ========================================
+  // VOLTAR NO CATÁLOGO
+  // ========================================
+
+  private catalogBack(): void {
+    if (
+      this.catalogView ===
+      "references"
+    ) {
+      this.selectedCatalogSubclass =
+        null;
+
+      this.catalogView =
+        "subclasses";
+
+      this.updateCatalog();
+
+      return;
+    }
+
+    if (
+      this.catalogView ===
+      "subclasses"
+    ) {
+      this.selectedCatalogClass =
+        null;
+
+      this.catalogView =
+        "classes";
+
+      /*
+       * Não resetamos catalogPage aqui.
+       * Assim, se o jogador estava na página 2,
+       * ele volta para a página 2.
+       */
+      this.updateCatalog();
+
+      return;
+    }
+
+    this.close();
+  }
+
+  // ========================================
+  // INPUT DO CATÁLOGO
+  // ========================================
+
+  private updateCatalogInput(): void {
+    if (
+      Phaser.Input.Keyboard.JustDown(
+        this.escapeKey
+      )
+    ) {
+      if (
+        this.catalogView ===
+        "references"
+      ) {
+        this.catalogBack();
+
+        return;
+      }
+
+      if (
+        this.catalogView ===
+        "subclasses"
+      ) {
+        this.catalogBack();
+
+        return;
+      }
+
+      this.close();
+
+      return;
+    }
+
+    if (
+      Phaser.Input.Keyboard.JustDown(
+        this.interactKey
+      )
+    ) {
+      if (
+        this.catalogView ===
+        "references"
+      ) {
+        this.catalogBack();
+
+        return;
+      }
+
+      if (
+        this.catalogView ===
+        "subclasses"
+      ) {
+        this.catalogBack();
+
+        return;
+      }
+
+      this.close();
+    }
+  }
+
+  // ========================================
   // INICIAR DIÁLOGO
   // ========================================
 
@@ -1005,14 +2328,37 @@ export class DialogueSystem {
       return;
     }
 
+    // ========================================
+    // CATÁLOGO
+    // ========================================
+
+    if (this.catalogMode) {
+      this.updateCatalogInput();
+
+      return;
+    }
+
+    // ========================================
+    // REGISTRO
+    // ========================================
+
     if (this.registrationMode) {
       return;
     }
 
+    // ========================================
+    // INPUT DE NOME
+    // ========================================
+
     if (this.inputMode) {
       this.updateNameInput();
+
       return;
     }
+
+    // ========================================
+    // SELEÇÃO DE CLASSE ANTIGA
+    // ========================================
 
     if (this.classSelectionMode) {
       return;
@@ -1025,6 +2371,7 @@ export class DialogueSystem {
 
     if (!currentNode) {
       this.close();
+
       return;
     }
 
@@ -1062,6 +2409,7 @@ export class DialogueSystem {
 
     if (!node) {
       this.close();
+
       return;
     }
 
@@ -1072,13 +2420,22 @@ export class DialogueSystem {
     if (node.action) {
       node.action();
 
-      if (this.registrationMode) {
+      /*
+       * Uma action pode abrir o catálogo.
+       * Nesse caso, não devemos continuar renderizando
+       * o diálogo por baixo dele.
+       */
+      if (
+        this.registrationMode ||
+        this.catalogMode
+      ) {
         return;
       }
     }
 
     if (node.inputName) {
       this.startNameInput();
+
       return;
     }
 
@@ -1232,6 +2589,18 @@ export class DialogueSystem {
       choice.action();
     }
 
+    /*
+     * Se a action abriu o catálogo, não devemos
+     * executar o fechamento normal da escolha.
+     */
+    if (this.catalogMode) {
+      return;
+    }
+
+    if (this.registrationMode) {
+      return;
+    }
+
     if (choice.nextNode) {
       this.currentNodeId =
         choice.nextNode;
@@ -1241,9 +2610,7 @@ export class DialogueSystem {
       return;
     }
 
-    if (!this.registrationMode) {
-      this.close();
-    }
+    this.close();
   }
 
   // ========================================
@@ -1258,6 +2625,7 @@ export class DialogueSystem {
 
     if (!node) {
       this.close();
+
       return;
     }
 
@@ -1285,6 +2653,8 @@ export class DialogueSystem {
   ): void {
     this.active = true;
     this.registrationMode = true;
+
+    this.catalogMode = false;
 
     this.registrationClasses =
       classes;
@@ -1321,6 +2691,10 @@ export class DialogueSystem {
     );
 
     this.clearChoices();
+
+    this.catalogContainer.setVisible(
+      false
+    );
 
     this.registrationContainer.setVisible(
       true
@@ -1644,19 +3018,11 @@ export class DialogueSystem {
       characterClass.description
     );
 
-    // ========================================
-    // ATRIBUTOS
-    // ========================================
-
     this.selectedClassAttributes.setText(
       `Força: ${characterClass.strength}          Vitalidade: ${characterClass.vitality}\n` +
         `Defesa: ${characterClass.defense}         Agilidade: ${characterClass.agility}\n` +
         `Sorte: ${characterClass.luck}          Inteligência: ${characterClass.intelligence}`
     );
-
-    // ========================================
-    // PASSIVAS
-    // ========================================
 
     const passiveText =
       characterClass.passives
@@ -1671,10 +3037,6 @@ export class DialogueSystem {
         "Nenhuma passiva."
     );
 
-    // ========================================
-    // HABILIDADES
-    // ========================================
-
     const abilityText =
       characterClass.abilities
         .map(
@@ -1687,10 +3049,6 @@ export class DialogueSystem {
       abilityText ||
         "Nenhuma habilidade."
     );
-
-    // ========================================
-    // RESTANTE DA UI
-    // ========================================
 
     this.selectedClassIconText.setText(
       characterClass.name.toUpperCase()
@@ -2377,7 +3735,7 @@ export class DialogueSystem {
   }
 
   // ========================================
-  // LIMPAR
+  // LIMPAR REGISTRO
   // ========================================
 
   private clearRegistrationClasses(): void {
@@ -2410,6 +3768,92 @@ export class DialogueSystem {
 
     this.registrationClassArrows =
       [];
+  }
+
+  // ========================================
+  // LIMPAR CATÁLOGO
+  // ========================================
+
+  private clearCatalogClassButtons(): void {
+    for (
+      const button of
+      this.catalogClassButtons
+    ) {
+      button.destroy();
+    }
+
+    for (
+      const text of
+      this.catalogClassTexts
+    ) {
+      text.destroy();
+    }
+
+    this.catalogClassButtons =
+      [];
+
+    this.catalogClassTexts =
+      [];
+  }
+
+  private clearCatalogSubclassButtons(): void {
+    for (
+      const button of
+      this.catalogSubclassButtons
+    ) {
+      button.destroy();
+    }
+
+    for (
+      const text of
+      this.catalogSubclassTexts
+    ) {
+      text.destroy();
+    }
+
+    this.catalogSubclassButtons =
+      [];
+
+    this.catalogSubclassTexts =
+      [];
+
+    /*
+     * Remove textos dinâmicos das referências
+     * e mensagens auxiliares.
+     */
+    const children =
+      this.catalogContainer.list.slice();
+
+    children.forEach(
+      (child) => {
+        if (
+          child instanceof
+            Phaser.GameObjects.Text &&
+          child !==
+            this.catalogTitle &&
+          child !==
+            this.catalogSubtitle &&
+          child !==
+            this.catalogClassListTitle &&
+          child !==
+            this.catalogDetailsTitle &&
+          child !==
+            this.catalogDetailsText &&
+          child !==
+            this.catalogBackButton &&
+          child !==
+            this.catalogCloseButton &&
+          child !==
+            this.catalogPreviousButton &&
+          child !==
+            this.catalogPageText &&
+          child !==
+            this.catalogNextButton
+        ) {
+          child.destroy();
+        }
+      }
+    );
   }
 
   private clearChoices(): void {
@@ -2450,11 +3894,18 @@ export class DialogueSystem {
     this.registrationMode =
       false;
 
+    this.catalogMode =
+      false;
+
     this.clearChoices();
 
     this.clearClassSelection();
 
     this.clearRegistrationClasses();
+
+    this.clearCatalogClassButtons();
+
+    this.clearCatalogSubclassButtons();
 
     // ========================================
     // DIÁLOGO
@@ -2513,6 +3964,14 @@ export class DialogueSystem {
     );
 
     // ========================================
+    // CATÁLOGO
+    // ========================================
+
+    this.catalogContainer.setVisible(
+      false
+    );
+
+    // ========================================
     // REMOVER INPUTS
     // ========================================
 
@@ -2541,6 +4000,17 @@ export class DialogueSystem {
 
     this.registrationPlayerName =
       "";
+
+    this.selectedCatalogClass =
+      null;
+
+    this.selectedCatalogSubclass =
+      null;
+
+    this.catalogView =
+      "classes";
+
+    this.catalogPage = 0;
 
     this.onNameConfirmed =
       null;

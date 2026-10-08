@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import { Item, ItemRarity } from "../items/Item";
 import { Armor } from "../items/Armor";
 import { Weapon } from "../items/Weapon";
+import { Player } from "../entities/Player";
+import type { EquipmentBonuses } from "./StatsSystem";
 
 interface InventorySlot {
   item: Item | null;
@@ -31,6 +33,7 @@ type DragSource =
 
 export class InventorySystem {
   private scene: Phaser.Scene;
+  private player: Player;
   private inventoryOpen = false;
   private inputBlocked = false;
 
@@ -79,6 +82,10 @@ export class InventorySystem {
   private itemRarityText!: Phaser.GameObjects.Text;
   private itemQuantityText!: Phaser.GameObjects.Text;
 
+  private itemAttributesPanel!: Phaser.GameObjects.Rectangle;
+  private itemAttributesTitle!: Phaser.GameObjects.Text;
+  private itemAttributesText!: Phaser.GameObjects.Text;
+
   private healthBarBackground!: Phaser.GameObjects.Rectangle;
   private healthBar!: Phaser.GameObjects.Rectangle;
   private healthBarText!: Phaser.GameObjects.Text;
@@ -106,8 +113,12 @@ export class InventorySystem {
   private dragVisual: Phaser.GameObjects.Container | null =
     null;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(
+    scene: Phaser.Scene,
+    player: Player
+  ) {
     this.scene = scene;
+    this.player = player;
 
     for (
       let i = 0;
@@ -360,7 +371,7 @@ export class InventorySystem {
         x,
         y - 76,
         235,
-        70,
+        78,
         0x11151b
       );
 
@@ -384,31 +395,36 @@ export class InventorySystem {
       ([name, value], index) => {
         const rowY =
           y -
-          101 +
-          index * 23;
+          103 +
+          index * 24;
 
         const nameText =
           this.scene.add.text(
-            x - 72,
+            x - 100,
             rowY,
             name,
             {
               fontFamily: "Arial",
-              fontSize: "10px",
+              fontSize: "9px",
               color: "#9298a2",
+              fontStyle: "bold",
             }
           );
 
         const valueText =
           this.scene.add.text(
-            x + 72,
+            x + 100,
             rowY,
             value,
             {
               fontFamily: "Arial",
-              fontSize: "10px",
+              fontSize: "9px",
               color: "#eeeeee",
               fontStyle: "bold",
+              align: "right",
+              wordWrap: {
+                width: 125,
+              },
             }
           );
 
@@ -1285,6 +1301,70 @@ export class InventorySystem {
       this.itemRarityText,
       this.itemQuantityText,
     ]);
+
+    // ========================================
+    // PAINEL DE ATRIBUTOS DO ITEM
+    // ========================================
+    // Este painel fica separado da descrição e
+    // aparece ao lado do item selecionado.
+
+    this.itemAttributesPanel =
+      this.scene.add.rectangle(
+        x,
+        y,
+        112,
+        68,
+        0x11151b,
+        0.98
+      );
+
+    this.itemAttributesPanel.setStrokeStyle(
+      1,
+      0x59616c,
+      1
+    );
+
+    this.itemAttributesTitle =
+      this.scene.add.text(
+        x,
+        y - 27,
+        "ATRIBUTOS",
+        {
+          fontFamily: "Arial",
+          fontSize: "8px",
+          color: "#d7d9dd",
+          fontStyle: "bold",
+          align: "center",
+        }
+      );
+
+    this.itemAttributesTitle.setOrigin(0.5);
+
+    this.itemAttributesText =
+      this.scene.add.text(
+        x - 47,
+        y - 12,
+        "",
+        {
+          fontFamily: "Arial",
+          fontSize: "8px",
+          color: "#bfc4cc",
+          lineSpacing: 4,
+          wordWrap: {
+            width: 94,
+          },
+        }
+      );
+
+    this.uiContainer.add([
+      this.itemAttributesPanel,
+      this.itemAttributesTitle,
+      this.itemAttributesText,
+    ]);
+
+    this.itemAttributesPanel.setVisible(false);
+    this.itemAttributesTitle.setVisible(false);
+    this.itemAttributesText.setVisible(false);
   }
 
   private createBottomBars(
@@ -1677,6 +1757,7 @@ export class InventorySystem {
     }
 
     this.clearSelection();
+    this.updatePlayerEquipmentBonuses();
 
     return true;
   }
@@ -1710,7 +1791,89 @@ export class InventorySystem {
 
     equipmentSlot.item = null;
 
+    this.updatePlayerEquipmentBonuses();
+
     return true;
+  }
+
+  private updatePlayerEquipmentBonuses(): void {
+    const bonuses: EquipmentBonuses = {
+      strength: 0,
+      vitality: 0,
+      defense: 0,
+      agility: 0,
+      luck: 0,
+      intelligence: 0,
+    };
+
+    this.equipmentSlots.forEach((slot) => {
+      if (!slot.item) {
+        return;
+      }
+
+      if (slot.item instanceof Armor) {
+        bonuses.defense += slot.item.defense;
+      }
+
+      slot.item.attributes.forEach((attribute) => {
+        if (typeof attribute.value !== "number") {
+          return;
+        }
+
+        const name = this.normalizeAttributeName(
+          attribute.name
+        );
+
+        switch (name) {
+          case "forca":
+            bonuses.strength += attribute.value;
+            break;
+
+          case "vitalidade":
+            bonuses.vitality += attribute.value;
+            break;
+
+          case "defesa":
+            bonuses.defense += attribute.value;
+            break;
+
+          case "agilidade":
+            bonuses.agility += attribute.value;
+            break;
+
+          case "sorte":
+            bonuses.luck += attribute.value;
+            break;
+
+          case "inteligencia":
+            bonuses.intelligence += attribute.value;
+            break;
+        }
+      });
+    });
+
+    this.player.setEquipmentBonuses(bonuses);
+
+    const shoulderArmor =
+      this.equipmentSlots.find(
+        (slot) => slot.id === "shoulder"
+      )?.item;
+
+    this.player.setEquippedArmorVisual(
+      shoulderArmor instanceof Armor
+        ? shoulderArmor
+        : null
+    );
+
+    this.updatePlayerStatus();
+  }
+
+  private normalizeAttributeName(name: string): string {
+    return name
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
   }
 
   private canEquipItemInSlot(
@@ -2003,6 +2166,87 @@ export class InventorySystem {
     );
   }
 
+  private updatePlayerStatus(): void {
+    if (!this.player) {
+      return;
+    }
+
+    const maxHealth = this.player.maxHealth;
+    const health = this.player.health;
+    const attack = this.player.getAttack();
+    const defense = this.player.getDefense();
+    const agility = this.player.getAgility();
+    const luck = this.player.getLuck();
+    const intelligence = this.player.getIntelligence();
+    const movementSpeed = Math.floor(
+      200 * (1 + agility * 0.03)
+    );
+
+    if (this.statsTexts.length >= 20) {
+      this.statsTexts[7].setText(
+        `${Math.ceil(health)} / ${Math.ceil(maxHealth)}`
+      );
+      this.statsTexts[9].setText(`${attack}`);
+      this.statsTexts[11].setText(`${defense}`);
+      this.statsTexts[13].setText(`${movementSpeed}`);
+      this.statsTexts[15].setText("5%");
+      this.statsTexts[17].setText(`${luck}`);
+      this.statsTexts[19].setText(`${intelligence}`);
+    }
+
+    if (this.attributeTexts.length >= 18) {
+      this.attributeTexts[1].setText(
+        `${this.player.getStrength()}`
+      );
+      this.attributeTexts[4].setText(
+        `${this.player.getVitality()}`
+      );
+      this.attributeTexts[7].setText(
+        `${this.player.getDefense()}`
+      );
+      this.attributeTexts[10].setText(
+        `${this.player.getAgility()}`
+      );
+      this.attributeTexts[13].setText(
+        `${this.player.getLuck()}`
+      );
+      this.attributeTexts[16].setText(
+        `${this.player.getIntelligence()}`
+      );
+    }
+  }
+
+  private getItemAttributeLines(item: Item): string[] {
+    const lines: string[] = [];
+    const hasDefenseAttribute = item.attributes.some(
+      (attribute) =>
+        typeof attribute.value === "number" &&
+        this.normalizeAttributeName(attribute.name) === "defesa"
+    );
+
+    item.attributes.forEach((attribute) => {
+      if (typeof attribute.value !== "number") {
+        return;
+      }
+
+      lines.push(
+        `${attribute.name} +${attribute.value}`
+      );
+    });
+
+    if (
+      item instanceof Armor &&
+      item.defense !== 0 &&
+      !hasDefenseAttribute
+    ) {
+      lines.push(
+        `Defesa +${item.defense}`
+      );
+    }
+
+    return lines;
+  }
+
   // ========================================
   // SELEÇÃO
   // ========================================
@@ -2044,6 +2288,11 @@ export class InventorySystem {
     this.itemDescriptionText.setText(
       slot.item.description ||
         "Sem descrição."
+    );
+
+    this.updateItemAttributesPopup(
+      index,
+      slot.item
     );
 
     this.itemRarityText.setText(
@@ -2123,7 +2372,128 @@ export class InventorySystem {
     this.itemRarityText.setText("");
     this.itemQuantityText.setText("");
 
+    this.hideItemAttributesPopup();
+
     this.updateSelectionVisuals();
+  }
+
+  private updateItemAttributesPopup(
+    index: number,
+    item: Item
+  ): void {
+    const attributeLines =
+      this.getItemAttributeLines(item);
+
+    if (attributeLines.length === 0) {
+      this.hideItemAttributesPopup();
+      return;
+    }
+
+    const slotBackground =
+      this.inventorySlotBackgrounds[index];
+
+    if (!slotBackground) {
+      this.hideItemAttributesPopup();
+      return;
+    }
+
+    const popupWidth = 112;
+    const popupHeight = 68;
+    const slotSize = 43;
+    const margin = 6;
+
+    // O painel acompanha o item selecionado e fica
+    // para o lado dele, sem sair do painel do inventário.
+    // Na última coluna, ele aparece à esquerda.
+    const column = index % 6;
+    const placeRight = column < 5;
+
+    let popupX =
+      placeRight
+        ? slotBackground.x +
+          slotSize / 2 +
+          margin +
+          popupWidth / 2
+        : slotBackground.x -
+          slotSize / 2 -
+          margin -
+          popupWidth / 2;
+
+    const panelWidth = 330;
+    const panelHeight = 510;
+
+    const panelLeft =
+      this.inventoryPanel.x -
+      panelWidth / 2;
+
+    const panelRight =
+      this.inventoryPanel.x +
+      panelWidth / 2;
+
+    const panelTop =
+      this.inventoryPanel.y -
+      panelHeight / 2;
+
+    const panelBottom =
+      this.inventoryPanel.y +
+      panelHeight / 2;
+
+    popupX = Phaser.Math.Clamp(
+      popupX,
+      panelLeft +
+        margin +
+        popupWidth / 2,
+      panelRight -
+        margin -
+        popupWidth / 2
+    );
+
+    const popupY = Phaser.Math.Clamp(
+      slotBackground.y,
+      panelTop +
+        margin +
+        popupHeight / 2,
+      panelBottom -
+        margin -
+        popupHeight / 2
+    );
+
+    this.itemAttributesPanel.setPosition(
+      popupX,
+      popupY
+    );
+
+    this.itemAttributesTitle.setPosition(
+      popupX,
+      popupY - 27
+    );
+
+    this.itemAttributesText.setPosition(
+      popupX - 47,
+      popupY - 12
+    );
+
+    this.itemAttributesText.setText(
+      attributeLines.join("\n")
+    );
+
+    const rarityColor =
+      this.getRarityColor(item.rarity);
+
+    this.itemAttributesTitle.setColor(
+      rarityColor
+    );
+
+    this.itemAttributesPanel.setVisible(true);
+    this.itemAttributesTitle.setVisible(true);
+    this.itemAttributesText.setVisible(true);
+  }
+
+  private hideItemAttributesPopup(): void {
+    this.itemAttributesPanel.setVisible(false);
+    this.itemAttributesTitle.setVisible(false);
+    this.itemAttributesText.setVisible(false);
+    this.itemAttributesText.setText("");
   }
 
   // ========================================
@@ -2581,6 +2951,7 @@ export class InventorySystem {
       characterClass;
 
     this.updateCharacterInfo();
+    this.updatePlayerStatus();
   }
 
   setSubclass(
@@ -2698,6 +3069,7 @@ export class InventorySystem {
       true
     );
 
+    this.updatePlayerEquipmentBonuses();
     this.updateAllEquipmentSlots();
     this.updateAllInventorySlots();
 

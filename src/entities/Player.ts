@@ -4,18 +4,19 @@ import {
   SCENE_KEYS,
 } from "../utils/constants";
 import { Weapon } from "../items/Weapon";
+import { Armor } from "../items/Armor";
 import {
   CHARACTER_CLASSES,
   CharacterClassData,
   CharacterClassId,
 } from "./CharacterClass";
-import { StatsSystem } from "../systems/StatsSystem";
 import {
+  StatsSystem,
   EquipmentBonuses,
 } from "../systems/StatsSystem";
 import {
-  drawClassBack,
-  drawClassFront,
+  drawEquipmentBack,
+  drawEquipmentFront,
 } from "./ClassAccessories";
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
@@ -34,6 +35,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private accessoryBack!: Phaser.GameObjects.Graphics;
   private accessoryFront!: Phaser.GameObjects.Graphics;
+
+  private equippedArmor: Armor | null = null;
 
   private bodySize = 28;
 
@@ -83,85 +86,138 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     intelligence: 0,
   };
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, "");
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number
+  ) {
+    super(
+      scene,
+      x,
+      y,
+      ""
+    );
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
-    this.setDisplaySize(28, 28);
-    this.setTint(0x3498db);
-    this.setDepth(10);
+    this.setDisplaySize(
+      28,
+      28
+    );
 
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setCollideWorldBounds(true);
+    this.setTint(
+      0x3498db
+    );
+
+    this.setDepth(
+      10
+    );
+
+    const body =
+      this.body as Phaser.Physics.Arcade.Body;
+
+    body.setCollideWorldBounds(
+      true
+    );
 
     this.characterClass =
       CHARACTER_CLASSES.find(
-        (characterClass) => characterClass.id === "warrior"
+        (characterClass) =>
+          characterClass.id ===
+          "warrior"
       )!;
 
-    this.accessoryBack = scene.add.graphics();
-    this.accessoryBack.setDepth(9);
+    this.accessoryBack =
+      scene.add.graphics();
 
-    this.accessoryFront = scene.add.graphics();
-    this.accessoryFront.setDepth(11);
+    this.accessoryBack.setDepth(
+      9
+    );
+
+    this.accessoryFront =
+      scene.add.graphics();
+
+    this.accessoryFront.setDepth(
+      11
+    );
 
     this.redrawAccessories();
 
-    this.maxHealth = StatsSystem.getMaxHealth(
-      100,
-      this.characterClass,
-      this.equipmentBonuses
+    this.maxHealth =
+      StatsSystem.getMaxHealth(
+        100,
+        this.characterClass,
+        this.equipmentBonuses
+      );
+
+    this.health =
+      this.maxHealth;
+
+    this.healthBarBackground =
+      scene.add.rectangle(
+        this.x,
+        this.y -
+          this.healthBarOffsetY,
+        this.healthBarWidth,
+        this.healthBarHeight,
+        0x222222
+      );
+
+    this.healthBarBackground.setDepth(
+      1000
     );
 
-    this.health = this.maxHealth;
+    this.healthBar =
+      scene.add.rectangle(
+        this.x,
+        this.y -
+          this.healthBarOffsetY,
+        this.healthBarWidth,
+        this.healthBarHeight,
+        0x2ecc71
+      );
 
-    this.healthBarBackground = scene.add.rectangle(
-      this.x,
-      this.y - this.healthBarOffsetY,
-      this.healthBarWidth,
-      this.healthBarHeight,
-      0x222222
+    this.healthBar.setDepth(
+      1001
     );
 
-    this.healthBarBackground.setDepth(1000);
-
-    this.healthBar = scene.add.rectangle(
-      this.x,
-      this.y - this.healthBarOffsetY,
-      this.healthBarWidth,
-      this.healthBarHeight,
-      0x2ecc71
+    this.healthBar.setOrigin(
+      0.5,
+      0.5
     );
-
-    this.healthBar.setDepth(1001);
-    this.healthBar.setOrigin(0.5, 0.5);
 
     if (!scene.input.keyboard) {
-      throw new Error("Teclado não disponível.");
+      throw new Error(
+        "Teclado não disponível."
+      );
     }
 
-    this.cursors = scene.input.keyboard.createCursorKeys();
+    this.cursors =
+      scene.input.keyboard.createCursorKeys();
 
     this.wasd = {
       W: scene.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.W
       ),
+
       A: scene.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.A
       ),
+
       S: scene.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.S
       ),
+
       D: scene.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.D
       ),
     };
 
-    this.sprintKey = scene.input.keyboard.addKey(
-      Phaser.Input.Keyboard.KeyCodes.SHIFT
-    );
+    this.sprintKey =
+      scene.input.keyboard.addKey(
+        Phaser.Input.Keyboard.KeyCodes.SHIFT
+      );
 
     scene.events.on(
       Phaser.Scenes.Events.POST_UPDATE,
@@ -173,27 +229,36 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   update(): void {
     this.healthBarBackground.setPosition(
       this.x,
-      this.y - this.healthBarOffsetY
+      this.y -
+        this.healthBarOffsetY
     );
 
     this.healthBar.setPosition(
       this.x,
-      this.y - this.healthBarOffsetY
+      this.y -
+        this.healthBarOffsetY
     );
 
     if (this.isDead) {
-      this.setVelocity(0, 0);
+      this.setVelocity(
+        0,
+        0
+      );
+
       return;
     }
 
     const delta =
-      this.scene.game.loop.delta / 1000;
+      this.scene.game.loop.delta /
+      1000;
 
     if (this.inCombat) {
       this.combatTimer -=
         this.scene.game.loop.delta;
 
-      if (this.combatTimer <= 0) {
+      if (
+        this.combatTimer <= 0
+      ) {
         this.combatTimer = 0;
         this.inCombat = false;
 
@@ -208,7 +273,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.health < this.maxHealth
     ) {
       this.health +=
-        this.healthRegenPerSecond * delta;
+        this.healthRegenPerSecond *
+        delta;
 
       this.health = Math.min(
         this.maxHealth,
@@ -223,7 +289,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.sprintKey
       )
     ) {
-      if (this.stamina > 0) {
+      if (
+        this.stamina > 0
+      ) {
         this.sprintEnabled =
           !this.sprintEnabled;
 
@@ -283,14 +351,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.staminaDrainPerSecond *
         delta;
 
-      this.stamina -= staminaUsed;
+      this.stamina -=
+        staminaUsed;
 
       this.stamina = Math.max(
         0,
         this.stamina
       );
 
-      if (this.stamina <= 0) {
+      if (
+        this.stamina <= 0
+      ) {
         this.stamina = 0;
         this.sprintEnabled = false;
 
@@ -298,7 +369,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
           "Stamina acabou! Sprint desativado."
         );
       }
-    } else if (!this.sprintEnabled) {
+    } else if (
+      !this.sprintEnabled
+    ) {
       this.stamina +=
         this.staminaRegenPerSecond *
         delta;
@@ -329,10 +402,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         ? sprintSpeed
         : normalSpeed;
 
-    if (velocity.length() > 0) {
+    if (
+      velocity.length() > 0
+    ) {
       velocity
         .normalize()
-        .scale(currentSpeed);
+        .scale(
+          currentSpeed
+        );
     }
 
     this.setVelocity(
@@ -341,24 +418,29 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
-  private redrawAccessories(): void {
-    const classId =
-      this.characterClass.id;
+  // ========================================
+  // VISUAL DO EQUIPAMENTO
+  // ========================================
 
+  private redrawAccessories(): void {
     this.accessoryBack.clear();
     this.accessoryFront.clear();
 
-    drawClassBack(
+    if (!this.equippedArmor) {
+      return;
+    }
+
+    drawEquipmentBack(
       this.accessoryBack,
-      classId,
+      this.equippedArmor.id,
       0,
       0,
       this.bodySize
     );
 
-    drawClassFront(
+    drawEquipmentFront(
       this.accessoryFront,
-      classId,
+      this.equippedArmor.id,
       0,
       0,
       this.bodySize
@@ -377,20 +459,35 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   };
 
+  setEquippedArmorVisual(
+    armor: Armor | null
+  ): void {
+    this.equippedArmor =
+      armor;
+
+    this.redrawAccessories();
+  }
+
+  // ========================================
+  // CLASSE
+  // ========================================
+
   setClass(
     classId: CharacterClassId
   ): boolean {
     const newClass =
       CHARACTER_CLASSES.find(
         (characterClass) =>
-          characterClass.id === classId
+          characterClass.id ===
+          classId
       );
 
     if (!newClass) {
       return false;
     }
 
-    this.characterClass = newClass;
+    this.characterClass =
+      newClass;
 
     this.redrawAccessories();
 
@@ -423,11 +520,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     bonuses: Partial<EquipmentBonuses>
   ): void {
     this.equipmentBonuses = {
-      strength: bonuses.strength ?? 0,
-      vitality: bonuses.vitality ?? 0,
-      defense: bonuses.defense ?? 0,
-      agility: bonuses.agility ?? 0,
-      luck: bonuses.luck ?? 0,
+      strength:
+        bonuses.strength ?? 0,
+
+      vitality:
+        bonuses.vitality ?? 0,
+
+      defense:
+        bonuses.defense ?? 0,
+
+      agility:
+        bonuses.agility ?? 0,
+
+      luck:
+        bonuses.luck ?? 0,
+
       intelligence:
         bonuses.intelligence ?? 0,
     };
@@ -526,6 +633,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
+  // ========================================
+  // COMBATE
+  // ========================================
+
   enterCombat(): void {
     if (this.isDead) {
       return;
@@ -535,6 +646,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.inCombat;
 
     this.inCombat = true;
+
     this.combatTimer =
       this.combatDuration;
 
@@ -560,6 +672,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
+  // ========================================
+  // VIDA
+  // ========================================
+
   getHealth(): number {
     return this.health;
   }
@@ -583,7 +699,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
-  heal(amount: number): void {
+  heal(
+    amount: number
+  ): void {
     if (
       this.isDead ||
       amount <= 0
@@ -591,12 +709,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    this.health += amount;
+    this.health +=
+      amount;
 
-    this.health = Math.min(
-      this.maxHealth,
-      this.health
-    );
+    this.health =
+      Math.min(
+        this.maxHealth,
+        this.health
+      );
 
     this.updateHealthBar();
 
@@ -607,10 +727,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
+  // ========================================
+  // STAMINA
+  // ========================================
+
   useStamina(
     amount: number
   ): boolean {
-    if (amount <= 0) {
+    if (
+      amount <= 0
+    ) {
       return true;
     }
 
@@ -621,12 +747,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return false;
     }
 
-    this.stamina -= amount;
+    this.stamina -=
+      amount;
 
-    this.stamina = Math.max(
-      0,
-      this.stamina
-    );
+    this.stamina =
+      Math.max(
+        0,
+        this.stamina
+      );
 
     return true;
   }
@@ -634,16 +762,20 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   restoreStamina(
     amount: number
   ): void {
-    if (amount <= 0) {
+    if (
+      amount <= 0
+    ) {
       return;
     }
 
-    this.stamina += amount;
+    this.stamina +=
+      amount;
 
-    this.stamina = Math.min(
-      this.maxStamina,
-      this.stamina
-    );
+    this.stamina =
+      Math.min(
+        this.maxStamina,
+        this.stamina
+      );
   }
 
   getStamina(): number {
@@ -657,6 +789,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   isSprinting(): boolean {
     return this.sprintEnabled;
   }
+
+  // ========================================
+  // ARMA
+  // ========================================
 
   equipWeapon(
     weapon: Weapon
@@ -682,7 +818,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   unequipWeapon(): void {
-    if (!this.equippedWeapon) {
+    if (
+      !this.equippedWeapon
+    ) {
       return;
     }
 
@@ -690,7 +828,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       `Arma removida: ${this.equippedWeapon.name}`
     );
 
-    this.equippedWeapon = null;
+    this.equippedWeapon =
+      null;
 
     console.log(
       `ATK total: ${this.getAttack()}`
@@ -713,6 +852,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
+  // ========================================
+  // LEVEL
+  // ========================================
+
   levelUp(
     newLevel: number
   ): void {
@@ -720,7 +863,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    this.level = newLevel;
+    this.level =
+      newLevel;
 
     this.maxHealth =
       StatsSystem.getMaxHealth(
@@ -737,10 +881,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.stamina =
       this.maxStamina;
 
-    this.sprintEnabled = false;
+    this.sprintEnabled =
+      false;
 
-    this.inCombat = false;
-    this.combatTimer = 0;
+    this.inCombat =
+      false;
+
+    this.combatTimer =
+      0;
 
     this.healthBar.setScale(
       1,
@@ -782,6 +930,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
+  // ========================================
+  // DANO
+  // ========================================
+
   takeDamage(
     amount: number,
     knockbackX: number = 0,
@@ -819,10 +971,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.health -=
       finalDamage;
 
-    this.health = Math.max(
-      0,
-      this.health
-    );
+    this.health =
+      Math.max(
+        0,
+        this.health
+      );
 
     console.log(
       `Player recebeu ${finalDamage} de dano. Vida: ${Math.ceil(
@@ -867,15 +1020,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  // ========================================
+  // MORTE
+  // ========================================
+
   private die(): void {
     if (this.isDead) {
       return;
     }
 
-    this.isDead = true;
-    this.inCombat = false;
-    this.combatTimer = 0;
-    this.sprintEnabled = false;
+    this.isDead =
+      true;
+
+    this.inCombat =
+      false;
+
+    this.combatTimer =
+      0;
+
+    this.sprintEnabled =
+      false;
 
     this.setVelocity(
       0,
