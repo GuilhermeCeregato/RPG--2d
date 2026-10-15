@@ -18,6 +18,7 @@ import {
 } from "../entities/CharacterClass";
 import { MapManager } from "../world/MapManager";
 import { SCENE_KEYS } from "../utils/constants";
+import { SubclassSystem, type SubclassUnlockResult } from "../systems/SubclassSystem";
 
 export class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -30,6 +31,7 @@ export class GameScene extends Phaser.Scene {
   private dialogueSystem!: DialogueSystem;
   private interactionSystem!: InteractionSystem;
   private inventorySystem!: InventorySystem;
+  private subclassSystem = new SubclassSystem();
 
   private combatText!: Phaser.GameObjects.Text;
   private combatTimer = 0;
@@ -546,6 +548,78 @@ export class GameScene extends Phaser.Scene {
       "Habilidades:",
       validClass.abilities
     );
+  }
+
+  // ========================================
+  // SISTEMA DE SUBCLASSES
+  // ========================================
+
+  /**
+   * Verifica se o jogador cumpre os requisitos para desbloquear
+   * uma subclasse. A prova precisa ser concluída pelo sistema de
+   * missões/NPC; este método não considera a prova concluída sozinho.
+   */
+  public canUnlockSubclass(
+    classId: string,
+    subclassId: string,
+    trialCompleted: boolean,
+    secretClassUnlocked = false
+  ): SubclassUnlockResult {
+    const playerLevel = this.experienceSystem
+      ? this.experienceSystem.getLevel()
+      : this.player?.level ?? 1;
+
+    return this.subclassSystem.canUnlock(
+      classId,
+      subclassId,
+      playerLevel,
+      trialCompleted,
+      secretClassUnlocked
+    );
+  }
+
+  /**
+   * Desbloqueia uma subclasse depois que o sistema da prova
+   * confirmar sua conclusão.
+   */
+  public unlockSubclass(
+    classId: string,
+    subclassId: string,
+    trialCompleted: boolean,
+    secretClassUnlocked = false
+  ): SubclassUnlockResult {
+    const result = this.canUnlockSubclass(
+      classId,
+      subclassId,
+      trialCompleted,
+      secretClassUnlocked
+    );
+
+    if (!result.success) {
+      return result;
+    }
+
+    return this.subclassSystem.unlockSubclass(
+      classId,
+      subclassId,
+      this.experienceSystem.getLevel(),
+      trialCompleted,
+      secretClassUnlocked
+    );
+  }
+
+  public selectUnlockedSubclass(
+    classId: string,
+    subclassId: string
+  ): boolean {
+    return this.subclassSystem.selectSubclass(
+      classId,
+      subclassId
+    );
+  }
+
+  public getSubclassProgress() {
+    return this.subclassSystem.getProgress();
   }
 
   // ========================================

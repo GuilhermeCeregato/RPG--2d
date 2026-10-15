@@ -12,6 +12,8 @@ import {
   ClassSubclass,
 } from "../data/ClassCatalog";
 
+import { SubclassSystem } from "./SubclassSystem";
+
 export interface DialogueChoice {
   text: string;
   nextNode?: string;
@@ -90,10 +92,11 @@ const CATALOG_DEPTH = 5000;
 const CATALOG_W = 1120;
 const CATALOG_H = 650;
 
-const CATALOG_CLASSES_PER_PAGE = 12;
+const CATALOG_CLASSES_PER_PAGE = 10;
 
 export class DialogueSystem {
   private scene: Phaser.Scene;
+  private subclassSystem = new SubclassSystem();
 
   // ========================================
   // DIÁLOGO NORMAL
@@ -1560,13 +1563,10 @@ export class DialogueSystem {
     index: number
   ): void {
     const buttonWidth = 350;
-    const buttonHeight = 31;
+    const buttonHeight = 34;
 
     const x = 45;
-    const y =
-      135 +
-      index *
-        35;
+    const y = 135 + index * 40;
 
     const button =
       this.scene.add
@@ -1704,6 +1704,7 @@ export class DialogueSystem {
     this.selectedCatalogSubclass =
       null;
 
+    this.catalogPage = 0;
     this.catalogView =
       "subclasses";
 
@@ -1715,90 +1716,52 @@ export class DialogueSystem {
   // ========================================
 
   private showCatalogSubclasses(): void {
-    if (
-      !this.selectedCatalogClass
-    ) {
-      this.catalogView =
-        "classes";
-
+    if (!this.selectedCatalogClass) {
+      this.catalogView = "classes";
       this.updateCatalog();
-
       return;
     }
 
-    const characterClass =
-      this.selectedCatalogClass;
+    const characterClass = this.selectedCatalogClass;
+    const subclasses = characterClass.subclasses ?? [];
 
-    this.catalogTitle.setText(
-      characterClass.name
-    );
-
+    this.catalogTitle.setText(characterClass.name);
     this.catalogSubtitle.setText(
-      "Escolha uma subclasse para conhecer seus personagens de referência."
+      "Selecione uma subclasse para ver sua descrição, atributos e referências."
     );
+    this.catalogClassListTitle.setText("SUBCLASSES DISPONÍVEIS");
+    this.catalogDetailsTitle.setText(characterClass.name);
+    this.catalogDetailsText.setPosition(465, 145).setOrigin(0, 0).setStyle({
+      fontSize: "13px",
+      color: "#dddddd",
+      align: "left",
+      wordWrap: { width: 580 },
+      lineSpacing: 5,
+    }).setText(characterClass.description || "Escolha uma subclasse na lista à esquerda.");
 
-    this.catalogClassListTitle.setText(
-      "SUBCLASSES"
-    );
+    this.catalogBackButton.setVisible(true);
 
-    this.catalogDetailsTitle.setText(
-      characterClass.name
-    );
-
-    this.catalogDetailsText.setText(
-      characterClass.description
-    );
-
-    this.catalogBackButton.setVisible(
-      true
-    );
-
-    this.catalogPreviousButton.setVisible(
-      false
-    );
-
-    this.catalogNextButton.setVisible(
-      false
-    );
-
-    this.catalogPageText.setVisible(
-      false
-    );
-
-    if (
-      characterClass.subclasses.length === 0
-    ) {
-      const emptyText =
-        this.scene.add
-          .text(
-            60,
-            145,
-            "Nenhuma subclasse cadastrada.",
-            {
-              fontSize: "12px",
-              color: "#999999",
-            }
-          )
-          .setOrigin(0, 0);
-
-      this.catalogContainer.add(
-        emptyText
-      );
-
+    if (subclasses.length === 0) {
+      this.catalogDetailsText.setText("Esta classe ainda não possui subclasses cadastradas.");
+      this.catalogPreviousButton.setVisible(false);
+      this.catalogNextButton.setVisible(false);
+      this.catalogPageText.setVisible(false);
       return;
     }
 
-    characterClass.subclasses.forEach(
-      (
-        subclass,
-        index
-      ) => {
-        this.createCatalogSubclassButton(
-          subclass,
-          index
-        );
-      }
-    );
+    const totalPages = Math.max(1, Math.ceil(subclasses.length / CATALOG_CLASSES_PER_PAGE));
+    this.catalogPage = Phaser.Math.Clamp(this.catalogPage, 0, totalPages - 1);
+    const start = this.catalogPage * CATALOG_CLASSES_PER_PAGE;
+    const visibleSubclasses = subclasses.slice(start, start + CATALOG_CLASSES_PER_PAGE);
+
+    visibleSubclasses.forEach((subclass, index) => {
+      this.createCatalogSubclassButton(subclass, index);
+    });
+
+    this.catalogPageText.setText(`${this.catalogPage + 1} / ${totalPages}`);
+    this.catalogPageText.setVisible(totalPages > 1);
+    this.catalogPreviousButton.setVisible(this.catalogPage > 0);
+    this.catalogNextButton.setVisible(this.catalogPage < totalPages - 1);
   }
 
   // ========================================
@@ -1810,13 +1773,13 @@ export class DialogueSystem {
     index: number
   ): void {
     const buttonWidth = 350;
-    const buttonHeight = 45;
+    const buttonHeight = 34;
 
     const x = 45;
     const y =
       135 +
       index *
-        54;
+        40;
 
     const button =
       this.scene.add
@@ -1840,7 +1803,7 @@ export class DialogueSystem {
     const text =
       this.scene.add
         .text(
-          x + 15,
+          x + 39,
           y +
             buttonHeight / 2,
           subclass.name,
@@ -1849,7 +1812,7 @@ export class DialogueSystem {
             color: "#ffffff",
             fontStyle: "bold",
             wordWrap: {
-              width: 285,
+              width: 255,
             },
           }
         )
@@ -1857,6 +1820,14 @@ export class DialogueSystem {
           0,
           0.5
         );
+
+    const icon = this.scene.add
+      .text(x + 19, y + buttonHeight / 2, this.getSubclassIcon(subclass), {
+        fontSize: "16px",
+        color: "#d4a017",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
 
     const arrow =
       this.scene.add
@@ -1877,6 +1848,7 @@ export class DialogueSystem {
     this.catalogContainer.add(
       [
         button,
+        icon,
         text,
         arrow,
       ]
@@ -1965,84 +1937,89 @@ export class DialogueSystem {
   // ========================================
 
   private showCatalogReferences(): void {
-    if (
-      !this.selectedCatalogClass ||
-      !this.selectedCatalogSubclass
-    ) {
-      this.catalogView =
-        "classes";
-
+    if (!this.selectedCatalogClass || !this.selectedCatalogSubclass) {
+      this.catalogView = "classes";
       this.updateCatalog();
-
       return;
     }
 
-    const characterClass =
-      this.selectedCatalogClass;
+    const characterClass = this.selectedCatalogClass;
+    const subclass = this.selectedCatalogSubclass;
+    const metadata = subclass as ClassSubclass & {
+      description?: string;
+      bonuses?: Record<string, number>;
+      attributes?: Record<string, number>;
+      icon?: string;
+    };
 
-    const subclass =
-      this.selectedCatalogSubclass;
+    this.catalogTitle.setText(characterClass.name);
+    this.catalogSubtitle.setText("Escolha uma subclasse e confira sua descrição, atributos e referências.");
+    this.catalogClassListTitle.setText("SUBCLASSES DISPONÍVEIS");
+    this.catalogDetailsTitle.setText(`${this.getSubclassIcon(subclass)}  ${subclass.name}`);
 
-    this.catalogTitle.setText(
-      subclass.name
-    );
+    // Mantém a lista vertical dentro do painel, sem deixar subclasses cortadas.
+    const subclasses = characterClass.subclasses ?? [];
+    const totalPages = Math.max(1, Math.ceil(subclasses.length / CATALOG_CLASSES_PER_PAGE));
+    this.catalogPage = Phaser.Math.Clamp(this.catalogPage, 0, totalPages - 1);
+    const start = this.catalogPage * CATALOG_CLASSES_PER_PAGE;
+    subclasses.slice(start, start + CATALOG_CLASSES_PER_PAGE).forEach((entry, index) => {
+      this.createCatalogSubclassButton(entry, index);
+    });
+    this.catalogPageText.setText(`${this.catalogPage + 1} / ${totalPages}`);
+    this.catalogPageText.setVisible(totalPages > 1);
+    this.catalogPreviousButton.setVisible(this.catalogPage > 0);
+    this.catalogNextButton.setVisible(this.catalogPage < totalPages - 1);
 
-    this.catalogSubtitle.setText(
-      `${characterClass.name} • Personagens de referência`
-    );
+    const bonuses = metadata.bonuses ?? metadata.attributes ?? {};
+    const bonusLabels: Record<string, string> = {
+      strength: "Força",
+      vitality: "Vitalidade",
+      defense: "Defesa",
+      agility: "Agilidade",
+      luck: "Sorte",
+      intelligence: "Inteligência",
+    };
+    const bonusLines = Object.entries(bonuses)
+      .filter(([, value]) => typeof value === "number" && value !== 0)
+      .map(([key, value]) => `+ ${bonusLabels[key] ?? key}: ${value}`);
 
-    this.catalogClassListTitle.setText(
-      "REFERÊNCIAS"
-    );
+    const referenceLines = subclass.references.map((reference) => {
+      const names = reference.characters.map((name) => `  • ${name}`).join("\n");
+      return `${reference.franchise}\n${names}`;
+    });
 
-    this.catalogDetailsTitle.setText(
-      subclass.name
-    );
+    const sections = [
+      metadata.description ? `DESCRIÇÃO\n${metadata.description}` : "DESCRIÇÃO\nSubclasse cadastrada no catálogo.",
+      `ATRIBUTOS E BÔNUS\n${bonusLines.length ? bonusLines.join("\n") : "Nenhum bônus específico cadastrado."}`,
+      `REFERÊNCIAS\n${referenceLines.length ? referenceLines.join("\n\n") : "Nenhuma referência cadastrada."}`,
+    ];
 
-    const referenceText =
-      subclass.references
-        .map(
-          (reference) => {
-            const characters =
-              reference.characters
-                .map(
-                  (character) =>
-                    `• ${character}`
-                )
-                .join("\n");
+    this.catalogDetailsText.setStyle({
+      fontSize: "13px",
+      color: "#dddddd",
+      align: "left",
+      wordWrap: { width: 580 },
+      lineSpacing: 5,
+    });
+    this.catalogDetailsText.setOrigin(0, 0);
+    this.catalogDetailsText.setPosition(465, 145);
+    this.catalogDetailsText.setText(sections.join("\n\n"));
 
-            return (
-              `${reference.franchise}\n` +
-              characters
-            );
-          }
-        )
-        .join("\n\n");
+    this.catalogBackButton.setVisible(true);
+  }
 
-    this.catalogDetailsText.setText(
-      referenceText ||
-        "Nenhuma referência cadastrada."
-    );
+  private getSubclassIcon(subclass: ClassSubclass): string {
+    const extended = subclass as ClassSubclass & { icon?: string };
+    if (extended.icon) return extended.icon;
 
-    this.catalogBackButton.setVisible(
-      true
-    );
-
-    this.catalogPreviousButton.setVisible(
-      false
-    );
-
-    this.catalogNextButton.setVisible(
-      false
-    );
-
-    this.catalogPageText.setVisible(
-      false
-    );
-
-    this.createReferenceEntries(
-      subclass
-    );
+    const id = `${subclass.id} ${subclass.name}`.toLowerCase();
+    if (/mage|magic|wizard|sorcer|spell|arcane/.test(id)) return "✦";
+    if (/assassin|rogue|shadow|stealth/.test(id)) return "◈";
+    if (/archer|hunter|ranger|sniper|sharpshoot/.test(id)) return "➶";
+    if (/heal|cleric|paladin|priest|holy/.test(id)) return "✚";
+    if (/summon|necrom|spirit|demon/.test(id)) return "☽";
+    if (/warrior|fighter|knight|sword|berserk|monk/.test(id)) return "⚔";
+    return "◆";
   }
 
   // ========================================
@@ -2125,42 +2102,15 @@ export class DialogueSystem {
   // PAGINAÇÃO
   // ========================================
 
-  private changeCatalogPage(
-    direction: number
-  ): void {
-    if (
-      this.catalogView !==
-      "classes"
-    ) {
-      return;
+  private changeCatalogPage(direction: number): void {
+    let totalItems = this.catalogClasses.length;
+
+    if (this.catalogView !== "classes") {
+      totalItems = this.selectedCatalogClass?.subclasses.length ?? 0;
     }
 
-    const totalPages =
-      Math.max(
-        1,
-        Math.ceil(
-          this.catalogClasses.length /
-            CATALOG_CLASSES_PER_PAGE
-        )
-      );
-
-    this.catalogPage +=
-      direction;
-
-    if (
-      this.catalogPage < 0
-    ) {
-      this.catalogPage = 0;
-    }
-
-    if (
-      this.catalogPage >=
-      totalPages
-    ) {
-      this.catalogPage =
-        totalPages - 1;
-    }
-
+    const totalPages = Math.max(1, Math.ceil(totalItems / CATALOG_CLASSES_PER_PAGE));
+    this.catalogPage = Phaser.Math.Clamp(this.catalogPage + direction, 0, totalPages - 1);
     this.updateCatalog();
   }
 
