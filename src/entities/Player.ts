@@ -1,3 +1,4 @@
+
 import Phaser from "phaser";
 import {
   PLAYER_SPEED,
@@ -18,6 +19,9 @@ import { SubclassSystem } from "../systems/SubclassSystem";
 import {
   drawEquipmentBack,
   drawEquipmentFront,
+  drawSubclassAccessoryBack,
+  drawSubclassAccessoryFront,
+  getSubclassAccessory,
 } from "./ClassAccessories";
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
@@ -39,7 +43,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private accessoryBack!: Phaser.GameObjects.Graphics;
   private accessoryFront!: Phaser.GameObjects.Graphics;
 
+  // Mantido para compatibilidade com chamadas antigas.
   private equippedArmor: Armor | null = null;
+
+  // Permite combinar visualmente vários equipamentos.
+  private equippedArmors: Armor[] = [];
 
   private bodySize = 28;
 
@@ -347,29 +355,84 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   }
 
+  // ========================================
+  // VISUAL DOS EQUIPAMENTOS
+  // ========================================
+
+  /**
+   * Desenha novamente os equipamentos visuais.
+   *
+   * Os acessórios de subclasse usam os desenhos próprios
+   * definidos em ClassAccessories.ts. Os demais itens
+   * continuam usando drawEquipmentBack/Front.
+   *
+   * Desbloquear uma subclasse não adiciona seu acessório
+   * a equippedArmors. Portanto, o acessório só aparece
+   * quando o inventário o envia como equipamento equipado.
+   */
   private redrawAccessories(): void {
     this.accessoryBack.clear();
     this.accessoryFront.clear();
 
-    if (!this.equippedArmor) {
+    if (this.equippedArmors.length === 0) {
       return;
     }
 
-    drawEquipmentBack(
-      this.accessoryBack,
-      this.equippedArmor.id,
-      0,
-      0,
-      this.bodySize
-    );
+    // Primeiro desenha a camada traseira de todos os itens.
+    this.equippedArmors.forEach((armor) => {
+      const subclassAccessory =
+        getSubclassAccessory(armor.id);
 
-    drawEquipmentFront(
-      this.accessoryFront,
-      this.equippedArmor.id,
-      0,
-      0,
-      this.bodySize
-    );
+      if (subclassAccessory) {
+        // Acessório especial de subclasse.
+        drawSubclassAccessoryBack(
+          this.accessoryBack,
+          subclassAccessory.subclassId,
+          0,
+          0,
+          this.bodySize
+        );
+
+        return;
+      }
+
+      // Equipamentos convencionais mantêm seus desenhos.
+      drawEquipmentBack(
+        this.accessoryBack,
+        armor.id,
+        0,
+        0,
+        this.bodySize
+      );
+    });
+
+    // Depois desenha a camada frontal de todos os itens.
+    this.equippedArmors.forEach((armor) => {
+      const subclassAccessory =
+        getSubclassAccessory(armor.id);
+
+      if (subclassAccessory) {
+        // Desenho frontal próprio do acessório de subclasse.
+        drawSubclassAccessoryFront(
+          this.accessoryFront,
+          subclassAccessory.subclassId,
+          0,
+          0,
+          this.bodySize
+        );
+
+        return;
+      }
+
+      // Equipamentos convencionais mantêm seus desenhos.
+      drawEquipmentFront(
+        this.accessoryFront,
+        armor.id,
+        0,
+        0,
+        this.bodySize
+      );
+    });
   }
 
   private updateAccessories = (): void => {
@@ -384,12 +447,51 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     );
   };
 
+  /**
+   * Compatibilidade com o método anterior.
+   * Chamadas existentes continuam funcionando.
+   */
   setEquippedArmorVisual(
     armor: Armor | null
   ): void {
     this.equippedArmor = armor;
+
+    this.equippedArmors = armor
+      ? [armor]
+      : [];
+
     this.redrawAccessories();
   }
+
+  /**
+   * Atualiza a aparência usando todos os equipamentos
+   * visuais atualmente equipados pelo personagem.
+   *
+   * O inventário deve enviar apenas os equipamentos
+   * realmente equipados, sem duplicar itens.
+   */
+  setEquippedEquipmentVisuals(
+    armors: Armor[]
+  ): void {
+    this.equippedArmors = [...armors];
+
+    // Mantém a referência antiga para compatibilidade.
+    this.equippedArmor =
+      this.equippedArmors[0] ?? null;
+
+    this.redrawAccessories();
+  }
+
+  /**
+   * Retorna uma cópia dos equipamentos visuais atuais.
+   */
+  getEquippedEquipmentVisuals(): Armor[] {
+    return [...this.equippedArmors];
+  }
+
+  // ========================================
+  // CLASSE
+  // ========================================
 
   setClass(
     classId: CharacterClassId
@@ -434,20 +536,40 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // SUBCLASSES
   // ========================================
 
-unlockSubclass(
-  subclassId: string,
-  secretUnlocked: boolean = false
-): boolean {
-  const result = this.subclassSystem.unlockSubclass(
-    this.characterClass.id,
-    subclassId,
-    this.level,
-    false,
-    secretUnlocked
-  );
+  unlockSubclass(
+    subclassId: string,
+    secretUnlocked: boolean = false
+  ): boolean {
+    const result = this.subclassSystem.unlockSubclass(
+      this.characterClass.id,
+      subclassId,
+      this.level,
+      false,
+      secretUnlocked
+    );
 
-  return result.success;
-}
+    if (!result.success) {
+      return false;
+    }
+
+    // ========================================
+    // EVENTO DE DESBLOQUEIO
+    // ========================================
+    // O InventorySystem poderá ouvir este evento para
+    // adicionar o acessório correspondente ao inventário.
+    //
+    // O evento NÃO equipa o acessório no personagem.
+    // A equipagem continua sendo uma ação separada.
+    this.scene.events.emit(
+      "subclass-unlocked",
+      {
+        classId: this.characterClass.id,
+        subclassId,
+      }
+    );
+
+    return true;
+  }
 
   selectSubclass(subclassId: string): boolean {
     const success = this.subclassSystem.selectSubclass(
@@ -515,7 +637,12 @@ unlockSubclass(
       this.health = Math.min(this.health, this.maxHealth);
     }
 
-    this.health = Phaser.Math.Clamp(this.health, 0, this.maxHealth);
+    this.health = Phaser.Math.Clamp(
+      this.health,
+      0,
+      this.maxHealth
+    );
+
     this.updateHealthBar();
   }
 
@@ -526,38 +653,37 @@ unlockSubclass(
   setEquipmentBonuses(
     bonuses: Partial<EquipmentBonuses>
   ): void {
+    const oldMaxHealth = this.maxHealth;
+
     this.equipmentBonuses = {
       strength: bonuses.strength ?? 0,
       vitality: bonuses.vitality ?? 0,
       defense: bonuses.defense ?? 0,
       agility: bonuses.agility ?? 0,
       luck: bonuses.luck ?? 0,
-      intelligence:
-        bonuses.intelligence ?? 0,
+      intelligence: bonuses.intelligence ?? 0,
     };
 
-    const oldMaxHealth =
-      this.maxHealth;
+    this.maxHealth = StatsSystem.getMaxHealth(
+      100 + (this.level - 1) * this.healthPerLevel,
+      this.characterClass,
+      this.getCombinedBonuses()
+    );
 
-    this.maxHealth =
-      StatsSystem.getMaxHealth(
-        100 +
-          (this.level - 1) *
-            this.healthPerLevel,
-        this.characterClass,
-        this.getCombinedBonuses()
+    if (this.maxHealth > oldMaxHealth) {
+      this.health += this.maxHealth - oldMaxHealth;
+    } else {
+      this.health = Math.min(
+        this.health,
+        this.maxHealth
       );
-
-    if (
-      this.maxHealth <
-      oldMaxHealth
-    ) {
-      this.health =
-        Math.min(
-          this.health,
-          this.maxHealth
-        );
     }
+
+    this.health = Phaser.Math.Clamp(
+      this.health,
+      0,
+      this.maxHealth
+    );
 
     this.updateHealthBar();
 
@@ -633,6 +759,10 @@ unlockSubclass(
       this.getCombinedBonuses()
     );
   }
+
+  // ========================================
+  // COMBATE
+  // ========================================
 
   enterCombat(): void {
     if (this.isDead) {
@@ -715,6 +845,10 @@ unlockSubclass(
     );
   }
 
+  // ========================================
+  // STAMINA
+  // ========================================
+
   useStamina(
     amount: number
   ): boolean {
@@ -765,6 +899,10 @@ unlockSubclass(
   isSprinting(): boolean {
     return this.sprintEnabled;
   }
+
+  // ========================================
+  // ARMAS / ATAQUE
+  // ========================================
 
   equipWeapon(
     weapon: Weapon
@@ -820,6 +958,10 @@ unlockSubclass(
       this.getCombinedBonuses()
     );
   }
+
+  // ========================================
+  // SUBIR DE NÍVEL
+  // ========================================
 
   levelUp(
     newLevel: number
@@ -889,6 +1031,10 @@ unlockSubclass(
       `ATK atual: ${this.getAttack()}`
     );
   }
+
+  // ========================================
+  // RECEBER DANO
+  // ========================================
 
   takeDamage(
     amount: number,

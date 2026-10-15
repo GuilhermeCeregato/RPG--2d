@@ -1398,6 +1398,133 @@ export function drawClassBack(
           24
         );
       break;
+
+    // ====================================
+    // NOVAS CLASSES
+    // ====================================
+
+    case "alchemist":
+      p.fill(0x315c45)
+        .roundRect(-56, -40, 112, 105, 18);
+      p.fill(0x8fc9a0)
+        .roundRect(-43, -28, 86, 12, 5);
+      p.fill(0x263d32)
+        .roundRect(-35, 4, 70, 44, 10);
+      break;
+
+    case "reaper":
+      p.fill(0x201b2b)
+        .roundRect(-60, -48, 120, 116, 22);
+      p.fill(0x100e18)
+        .triangle(-58, 30, 0, 80, 58, 30);
+      p.fill(0x62516f)
+        .triangle(-44, -42, 0, -18, 44, -42);
+      break;
+
+    case "ninja":
+      p.fill(0x171923)
+        .roundRect(-56, -45, 112, 108, 16);
+      p.fill(0x35394b)
+        .triangle(-48, 35, 0, 66, 48, 35);
+      p.fill(0x9f2537)
+        .roundRect(-48, -36, 96, 8, 3);
+      break;
+
+    case "monster_hunter":
+      p.fill(0x554431)
+        .roundRect(-59, -44, 118, 110, 16);
+      p.fill(0x34332d)
+        .roundRect(-44, -24, 88, 74, 10);
+      p.fill(0x9a7845)
+        .roundRect(-54, 20, 108, 12, 4);
+      break;
+
+    case "illusionist":
+      p.fill(0x35264f)
+        .roundRect(-57, -46, 114, 110, 20);
+      p.fill(0x7556a8)
+        .triangle(-50, 30, 0, 72, 50, 30);
+      p.fill(0xb9a0f4)
+        .circle(-34, -20, 4)
+        .circle(34, -20, 4);
+      break;
+
+    case "artillerist":
+      p.fill(0x424b55)
+        .roundRect(-58, -42, 116, 108, 16);
+      p.fill(0x78838c)
+        .roundRect(-48, -24, 18, 58, 5)
+        .roundRect(30, -24, 18, 58, 5);
+      p.fill(0x252a30)
+        .roundRect(-30, 18, 60, 28, 6);
+      break;
+
+    case "guardian":
+      p.fill(0x345b68)
+        .roundRect(-62, -46, 124, 114, 20);
+      p.fill(0x6b9da5)
+        .roundRect(-46, -30, 92, 70, 14);
+      p.fill(0xd4a017)
+        .circle(0, -20, 7);
+      break;
+
+    case "bastion":
+      p.fill(0x414b5a)
+        .roundRect(-64, -46, 128, 116, 18);
+      p.fill(0x697687)
+        .roundRect(-50, -30, 100, 72, 10);
+      p.stroke(3, 0x252b35)
+        .line(-42, -12, 42, -12)
+        .line(-42, 8, 42, 8);
+      break;
+
+    case "commander":
+      p.fill(0x343e59)
+        .roundRect(-58, -44, 116, 108, 18);
+      p.fill(0x8e3b45)
+        .triangle(-48, -32, 0, -8, 48, -32);
+      p.fill(0xd4a017)
+        .roundRect(-44, 20, 88, 10, 4);
+      break;
+
+    case "barbarian":
+      p.fill(0x67432f)
+        .roundRect(-60, -42, 120, 108, 18);
+      p.fill(0x9b6540)
+        .triangle(-48, -32, -25, -52, -12, -28)
+        .triangle(48, -32, 25, -52, 12, -28);
+      p.fill(0x432b23)
+        .roundRect(-44, 18, 88, 18, 5);
+      break;
+
+    case "engineer":
+      p.fill(0x46534a)
+        .roundRect(-58, -42, 116, 108, 16);
+      p.fill(0x777b70)
+        .roundRect(-46, -24, 24, 48, 5)
+        .roundRect(22, -24, 24, 48, 5);
+      p.fill(0xd4a017)
+        .circle(0, 20, 8);
+      break;
+
+    case "psychic":
+      p.fill(0x392d59)
+        .roundRect(-58, -44, 116, 110, 20);
+      p.fill(0x7964b5, 0.8)
+        .circle(-32, -18, 8)
+        .circle(32, -18, 8);
+      p.stroke(2, 0xc7b8ff)
+        .path([[-38, 12], [0, 34], [38, 12]]);
+      break;
+
+    case "unknown":
+      p.fill(0x242424)
+        .roundRect(-60, -48, 120, 116, 20);
+      p.fill(0x555555)
+        .triangle(-48, 24, 0, 72, 48, 24);
+      p.fill(0xb8b8b8)
+        .circle(0, -20, 6);
+      break;
   }
 }
 
@@ -2088,6 +2215,689 @@ export function drawClassFront(
         6,
         10
       );
+      break;
+
+    // ====================================
+    // NOVAS CLASSES
+    // ====================================
+
+    case "alchemist":
+      // Frascos e cinto de poções.
+      p.fill(0x315c45)
+        .roundRect(-42, 22, 84, 10, 4);
+
+      p.fill(0x54d6a0)
+        .roundRect(-38, 0, 12, 22, 4)
+        .roundRect(26, -4, 12, 26, 4);
+
+      p.fill(0x263d32)
+        .roundRect(-39, -4, 14, 6, 2)
+        .roundRect(25, -8, 14, 6, 2);
+
+      p.fill(0xe0c878)
+        .circle(-32, 10, 3)
+        .circle(32, 8, 3);
+      break;
+
+    case "reaper":
+      // Símbolo sombrio no peito.
+      p.fill(0x201b2b)
+        .roundRect(-28, -28, 56, 48, 12);
+
+      p.fill(0xaaa0bd)
+        .circle(0, -12, 9);
+
+      p.fill(0x201b2b)
+        .circle(-3, -14, 2)
+        .circle(3, -14, 2);
+
+      p.stroke(3, 0x8b789f)
+        .line(-16, -40, 0, -25)
+        .line(16, -40, 0, -25);
+      break;
+
+    case "ninja":
+      // Faixa e máscara.
+      p.fill(0x9f2537)
+        .roundRect(-32, -43, 64, 8, 3);
+
+      p.fill(0x171923)
+        .roundRect(-22, -27, 44, 13, 4);
+
+      p.fill(0xe5e5e5)
+        .circle(-9, -31, 2)
+        .circle(9, -31, 2);
+
+      p.fill(0x35394b)
+        .roundRect(-38, 24, 76, 7, 3);
+      break;
+
+    case "monster_hunter":
+      // Peitoral reforçado e troféu.
+      p.fill(0x554431)
+        .roundRect(-29, -34, 58, 56, 9);
+
+      p.stroke(2, 0x292923)
+        .strokeRoundRect(-29, -34, 58, 56, 9);
+
+      p.fill(0x9a7845)
+        .triangle(-18, -28, -4, -46, 2, -22)
+        .triangle(18, -28, 4, -46, -2, -22);
+
+      p.fill(0xc3a56b)
+        .circle(0, -8, 6);
+      break;
+
+    case "illusionist":
+      // Broche mágico.
+      p.fill(0x7556a8)
+        .circle(0, -12, 12);
+
+      p.fill(0xd8caff)
+        .polygon([
+          [0, -22],
+          [7, -12],
+          [0, -2],
+          [-7, -12],
+        ]);
+
+      p.stroke(2, 0xb9a0f4)
+        .path([
+          [-28, -34],
+          [-18, -18],
+          [-28, -2],
+        ])
+        .path([
+          [28, -34],
+          [18, -18],
+          [28, -2],
+        ]);
+      break;
+
+    case "artillerist":
+      // Placas metálicas e núcleo de energia.
+      p.fill(0x78838c)
+        .roundRect(-34, -30, 24, 38, 5)
+        .roundRect(10, -30, 24, 38, 5);
+
+      p.stroke(2, 0x252a30)
+        .strokeRoundRect(-34, -30, 24, 38, 5)
+        .strokeRoundRect(10, -30, 24, 38, 5);
+
+      p.fill(0xd4a017)
+        .circle(0, -10, 8);
+
+      p.fill(0xffe8a3)
+        .circle(0, -10, 3);
+      break;
+
+    case "guardian":
+      // Emblema protetor.
+      p.fill(0x6b9da5)
+        .polygon([
+          [-15, -28],
+          [15, -28],
+          [18, -10],
+          [0, 7],
+          [-18, -10],
+        ]);
+
+      p.stroke(2, 0xd0e6e7)
+        .path([
+          [-15, -28],
+          [15, -28],
+          [18, -10],
+          [0, 7],
+          [-18, -10],
+          [-15, -28],
+        ]);
+
+      p.fill(0xd4a017)
+        .circle(0, -12, 4);
+      break;
+
+    case "bastion":
+      // Placa de armadura pesada.
+      p.fill(0x697687)
+        .roundRect(-34, -32, 68, 48, 8);
+
+      p.stroke(3, 0x252b35)
+        .strokeRoundRect(-34, -32, 68, 48, 8);
+
+      p.fill(0x414b5a)
+        .rect(-4, -29, 8, 42)
+        .rect(-29, -5, 58, 7);
+
+      p.fill(0xd4a017)
+        .circle(0, -2, 4);
+      break;
+
+    case "commander":
+      // Insígnia de comando.
+      p.fill(0x8e3b45)
+        .triangle(-22, -30, 22, -30, 0, -6);
+
+      p.fill(0xd4a017)
+        .circle(0, -20, 5);
+
+      p.stroke(2, 0xd4a017)
+        .line(-28, -36, -28, -22)
+        .line(28, -36, 28, -22);
+
+      p.fill(0x343e59)
+        .roundRect(-34, 22, 68, 9, 3);
+      break;
+
+    case "barbarian":
+      // Proteção rústica e presas.
+      p.fill(0x9b6540)
+        .roundRect(-30, -30, 60, 36, 8);
+
+      p.fill(0xe8d9b5)
+        .triangle(-20, -28, -10, -28, -17, -12)
+        .triangle(20, -28, 10, -28, 17, -12);
+
+      p.fill(0x67432f)
+        .roundRect(-42, 24, 84, 9, 4);
+      break;
+
+    case "engineer":
+      // Ferramentas e engrenagem.
+      p.fill(0x777b70)
+        .roundRect(-38, -26, 16, 34, 4)
+        .roundRect(22, -26, 16, 34, 4);
+
+      p.fill(0xd4a017)
+        .circle(0, -10, 11);
+
+      p.fill(0x46534a)
+        .circle(0, -10, 5);
+
+      p.stroke(2, 0xd4a017)
+        .line(-8, -10, 8, -10)
+        .line(0, -18, 0, -2);
+      break;
+
+    case "psychic":
+      // Símbolo mental e energia psíquica.
+      p.fill(0x7964b5)
+        .circle(0, -12, 12);
+
+      p.fill(0xc7b8ff)
+        .circle(0, -12, 5);
+
+      p.stroke(2, 0xc7b8ff)
+        .path([
+          [-28, -32],
+          [-18, -18],
+          [-28, -4],
+        ])
+        .path([
+          [28, -32],
+          [18, -18],
+          [28, -4],
+        ]);
+      break;
+
+    case "unknown":
+      // Emblema misterioso.
+      p.fill(0x555555)
+        .circle(0, -14, 13);
+
+      p.fill(0x242424)
+        .circle(0, -14, 8);
+
+      p.fill(0xb8b8b8)
+        .circle(0, -14, 3);
+
+      p.stroke(2, 0x777777)
+        .path([
+          [-22, -34],
+          [-12, -22],
+          [-22, -10],
+        ])
+        .path([
+          [22, -34],
+          [12, -22],
+          [22, -10],
+        ]);
+      break;
+  }
+}
+
+/* ========================================
+ * ACESSÓRIOS EXCLUSIVOS DE SUBCLASSE
+ * ========================================
+ *
+ * Estes acessórios são independentes dos
+ * acessórios iniciais das classes.
+ *
+ * IMPORTANTE:
+ * - Escolher uma subclasse não equipa o item.
+ * - O sistema de inventário controla o desbloqueio
+ *   e a equipagem.
+ * - Os IDs são independentes dos IDs de classe.
+ * - A estrutura permite adicionar acessórios
+ *   raros e lendários futuramente.
+ */
+
+export type SubclassAccessoryRarity =
+  | "common"
+  | "rare"
+  | "epic"
+  | "legendary";
+
+export type SubclassAccessoryUnlockType =
+  | "subclass"
+  | "quest"
+  | "achievement"
+  | "progression";
+
+export interface SubclassAccessoryDefinition {
+  id: string;
+  subclassId: string;
+  name: string;
+  description: string;
+  rarity: SubclassAccessoryRarity;
+  unlockType: SubclassAccessoryUnlockType;
+  unlockedByDefault: boolean;
+}
+
+/**
+ * Catálogo inicial de acessórios de subclasse.
+ *
+ * Os acessórios começam bloqueados.
+ * O sistema responsável pela progressão deverá
+ * liberar o acessório quando necessário.
+ */
+export const SUBCLASS_ACCESSORY_CATALOG:
+  SubclassAccessoryDefinition[] = [
+    {
+      id: "accessory_subclass_warrior_samurai",
+      subclassId: "warrior_samurai",
+      name: "Insígnia do Samurai",
+      description:
+        "Uma insígnia de disciplina e domínio da espada.",
+      rarity: "rare",
+      unlockType: "subclass",
+      unlockedByDefault: false,
+    },
+    {
+      id: "accessory_subclass_knight_royal_knight",
+      subclassId: "knight_royal_knight",
+      name: "Brasão do Cavaleiro Real",
+      description:
+        "Um brasão que representa honra e lealdade.",
+      rarity: "rare",
+      unlockType: "subclass",
+      unlockedByDefault: false,
+    },
+    {
+      id: "accessory_subclass_mage_elementalist",
+      subclassId: "mage_elementalist",
+      name: "Núcleo Elemental",
+      description:
+        "Um cristal que canaliza o poder dos elementos.",
+      rarity: "epic",
+      unlockType: "subclass",
+      unlockedByDefault: false,
+    },
+    {
+      id: "accessory_subclass_psychic_power",
+      subclassId: "psychic_power",
+      name: "Foco Psíquico",
+      description:
+        "Um foco que intensifica a concentração mental.",
+      rarity: "epic",
+      unlockType: "subclass",
+      unlockedByDefault: false,
+    },
+  ];
+
+/**
+ * Consulta um acessório pelo ID.
+ */
+export function getSubclassAccessory(
+  accessoryId: string
+): SubclassAccessoryDefinition | undefined {
+  return SUBCLASS_ACCESSORY_CATALOG.find(
+    (accessory) => accessory.id === accessoryId
+  );
+}
+
+/**
+ * Consulta o acessório associado a uma subclasse.
+ *
+ * Retornar a definição não significa que o item
+ * foi desbloqueado ou equipado.
+ */
+export function getSubclassAccessoryBySubclass(
+  subclassId: string
+): SubclassAccessoryDefinition | undefined {
+  return SUBCLASS_ACCESSORY_CATALOG.find(
+    (accessory) => accessory.subclassId === subclassId
+  );
+}
+
+/**
+ * Desenha o acessório exclusivo atrás do personagem.
+ *
+ * Pode ser utilizado tanto na prévia quanto no jogo.
+ * O tamanho é convertido para as mesmas unidades
+ * usadas pelos desenhos existentes.
+ */
+export function drawSubclassAccessoryBack(
+  g: Graphics,
+  subclassId: string,
+  x: number,
+  y: number,
+  size: number
+): void {
+  if (!subclassId) return;
+
+  const p = new Pen(g, x, y, size / 100);
+
+  switch (subclassId) {
+    case "warrior_samurai":
+      // Tecido de ombro inspirado em armaduras samurais.
+      p.fill(0x7f1d1d)
+        .triangle(
+          -44, -40,
+          -18, -30,
+          -48, 38
+        )
+        .triangle(
+          44, -40,
+          18, -30,
+          48, 38
+        );
+
+      p.fill(0xd4a017)
+        .circle(-36, -27, 3)
+        .circle(36, -27, 3);
+      break;
+
+    case "knight_royal_knight":
+      // Manto real com acabamento dourado.
+      p.fill(0x243b5a)
+        .roundRect(-55, -44, 110, 105, 18);
+
+      p.fill(0xd4a017)
+        .triangle(-48, 35, 0, 76, 48, 35);
+
+      p.stroke(2, 0xf5d782)
+        .path([
+          [-28, -32],
+          [0, -10],
+          [28, -32],
+        ]);
+      break;
+
+    case "mage_elementalist":
+      // Manto com energia elemental.
+      p.fill(0x243b8a)
+        .roundRect(-55, -44, 110, 105, 18);
+
+      p.fill(0x38bdf8, 0.9)
+        .circle(-35, -20, 5)
+        .circle(35, -20, 5);
+
+      p.fill(0xf97316, 0.9)
+        .circle(-35, 8, 4)
+        .circle(35, 8, 4);
+
+      p.fill(0x34d399, 0.9)
+        .circle(0, 32, 5);
+      break;
+
+    case "psychic_power":
+      // Manto com marcas de energia mental.
+      p.fill(0x392d59)
+        .roundRect(-55, -44, 110, 105, 20);
+
+      p.stroke(3, 0xc7b8ff)
+        .path([
+          [-35, -20],
+          [-18, -5],
+          [-35, 10],
+        ])
+        .path([
+          [35, -20],
+          [18, -5],
+          [35, 10],
+        ]);
+
+      p.fill(0x7964b5, 0.9)
+        .circle(0, 28, 7);
+      break;
+
+    default:
+      // Base genérica para novas subclasses.
+      // O desenho varia conforme o ID, permitindo
+      // suportar subclasses sem alterar este arquivo.
+      {
+        let hash = 0;
+
+        for (let i = 0; i < subclassId.length; i++) {
+          hash = (
+            hash * 31 + subclassId.charCodeAt(i)
+          ) | 0;
+        }
+
+        const palette = [
+          0x4f46e5,
+          0x7c2d12,
+          0x166534,
+          0x6b21a8,
+          0x155e75,
+          0x7f1d1d,
+          0x374151,
+          0x854d0e,
+        ];
+
+        const color =
+          palette[Math.abs(hash) % palette.length];
+
+        p.fill(color)
+          .roundRect(-53, -43, 106, 101, 18);
+
+        p.fill(0x171717, 0.45)
+          .triangle(-48, 28, 0, 72, 48, 28);
+
+        p.fill(0xd4a017)
+          .circle(0, -22, 5);
+      }
+      break;
+  }
+}
+
+/**
+ * Desenha o acessório exclusivo na frente.
+ *
+ * A função não equipa nem desbloqueia o acessório:
+ * ela apenas desenha o visual solicitado.
+ */
+export function drawSubclassAccessoryFront(
+  g: Graphics,
+  subclassId: string,
+  x: number,
+  y: number,
+  size: number
+): void {
+  if (!subclassId) return;
+
+  const p = new Pen(g, x, y, size / 100);
+
+  switch (subclassId) {
+    case "warrior_samurai":
+      // Emblema vermelho e dourado.
+      p.fill(0x7f1d1d)
+        .polygon([
+          [-15, -28],
+          [15, -28],
+          [12, -8],
+          [0, 5],
+          [-12, -8],
+        ]);
+
+      p.stroke(2, 0xd4a017)
+        .path([
+          [-15, -28],
+          [15, -28],
+          [12, -8],
+          [0, 5],
+          [-12, -8],
+          [-15, -28],
+        ]);
+
+      p.fill(0xffd166)
+        .circle(0, -15, 4);
+
+      p.stroke(2, 0xd4a017)
+        .line(-22, -35, 22, -35);
+      break;
+
+    case "knight_royal_knight":
+      // Brasão real com gema central.
+      p.fill(0x243b5a)
+        .polygon([
+          [-18, -31],
+          [18, -31],
+          [16, -8],
+          [0, 8],
+          [-16, -8],
+        ]);
+
+      p.stroke(2, 0xd4a017)
+        .path([
+          [-18, -31],
+          [18, -31],
+          [16, -8],
+          [0, 8],
+          [-16, -8],
+          [-18, -31],
+        ]);
+
+      p.fill(0xf5d782)
+        .polygon([
+          [0, -26],
+          [7, -16],
+          [0, -7],
+          [-7, -16],
+        ]);
+
+      p.stroke(2, 0xd4a017)
+        .line(-25, -35, -25, -18)
+        .line(25, -35, 25, -18);
+      break;
+
+    case "mage_elementalist":
+      // Cristal com cores elementais.
+      p.fill(0x38bdf8)
+        .polygon([
+          [0, -31],
+          [12, -14],
+          [0, 3],
+          [-12, -14],
+        ]);
+
+      p.fill(0xf97316)
+        .triangle(-9, -18, -2, -27, -2, -10);
+
+      p.fill(0x34d399)
+        .triangle(9, -18, 2, -27, 2, -10);
+
+      p.stroke(2, 0xe0f2fe)
+        .path([
+          [0, -31],
+          [12, -14],
+          [0, 3],
+          [-12, -14],
+          [0, -31],
+        ]);
+
+      p.fill(0xffffff, 0.9)
+        .circle(0, -15, 3);
+      break;
+
+    case "psychic_power":
+      // Símbolo psíquico com núcleo luminoso.
+      p.fill(0x7964b5)
+        .circle(0, -15, 13);
+
+      p.stroke(2, 0xc7b8ff)
+        .ring(0, -15, 13);
+
+      p.fill(0xe9ddff)
+        .polygon([
+          [0, -26],
+          [6, -15],
+          [0, -4],
+          [-6, -15],
+        ]);
+
+      p.stroke(2, 0xc7b8ff)
+        .path([
+          [-25, -29],
+          [-17, -15],
+          [-25, -1],
+        ])
+        .path([
+          [25, -29],
+          [17, -15],
+          [25, -1],
+        ]);
+      break;
+
+    default:
+      // Emblema genérico para novas subclasses.
+      {
+        let hash = 0;
+
+        for (let i = 0; i < subclassId.length; i++) {
+          hash = (
+            hash * 31 + subclassId.charCodeAt(i)
+          ) | 0;
+        }
+
+        const palette = [
+          0x4f46e5,
+          0x7c2d12,
+          0x166534,
+          0x6b21a8,
+          0x155e75,
+          0x7f1d1d,
+          0x374151,
+          0x854d0e,
+        ];
+
+        const color =
+          palette[Math.abs(hash) % palette.length];
+
+        p.fill(color)
+          .polygon([
+            [0, -30],
+            [13, -15],
+            [0, 2],
+            [-13, -15],
+          ]);
+
+        p.stroke(2, 0xffffff)
+          .path([
+            [0, -30],
+            [13, -15],
+            [0, 2],
+            [-13, -15],
+            [0, -30],
+          ]);
+
+        p.fill(0xffd166)
+          .circle(0, -15, 4);
+
+        p.stroke(2, 0xffffff, 0.75)
+          .line(-23, -29, -15, -18)
+          .line(23, -29, 15, -18);
+      }
       break;
   }
 }

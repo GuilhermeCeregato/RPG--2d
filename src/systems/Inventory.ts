@@ -4,6 +4,12 @@ import { Armor } from "../items/Armor";
 import { Weapon } from "../items/Weapon";
 import { Player } from "../entities/Player";
 import type { EquipmentBonuses } from "./StatsSystem";
+import {
+  SUBCLASS_ACCESSORY_CATALOG,
+  getSubclassAccessory,
+  drawSubclassAccessoryFront,
+  type SubclassAccessoryDefinition,
+} from "../entities/ClassAccessories";
 
 interface InventorySlot {
   item: Item | null;
@@ -16,6 +22,7 @@ interface EquipmentSlot {
   item: Item | null;
   background: Phaser.GameObjects.Rectangle;
   icon: Phaser.GameObjects.Image | null;
+  customIcon: Phaser.GameObjects.Graphics;
   label: Phaser.GameObjects.Text;
 }
 
@@ -27,9 +34,7 @@ type InventoryCategory =
   | "material"
   | "quest";
 
-type DragSource =
-  | "inventory"
-  | "equipment";
+type DragSource = "inventory" | "equipment";
 
 export class InventorySystem {
   private scene: Phaser.Scene;
@@ -71,9 +76,8 @@ export class InventorySystem {
   private categoryTexts: Phaser.GameObjects.Text[] = [];
 
   private inventorySlotBackgrounds: Phaser.GameObjects.Rectangle[] = [];
-  private inventorySlotIcons: (
-    Phaser.GameObjects.Image | null
-  )[] = [];
+  private inventorySlotIcons: (Phaser.GameObjects.Image | null)[] = [];
+  private inventorySlotCustomIcons: Phaser.GameObjects.Graphics[] = [];
   private inventorySlotTexts: Phaser.GameObjects.Text[] = [];
 
   private itemInfoPanel!: Phaser.GameObjects.Rectangle;
@@ -110,29 +114,20 @@ export class InventorySystem {
   private dragItem: Item | null = null;
   private dragQuantity = 0;
 
-  private dragVisual: Phaser.GameObjects.Container | null =
-    null;
+  private dragVisual: Phaser.GameObjects.Container | null = null;
 
-  constructor(
-    scene: Phaser.Scene,
-    player: Player
-  ) {
+  constructor(scene: Phaser.Scene, player: Player) {
     this.scene = scene;
     this.player = player;
 
-    for (
-      let i = 0;
-      i < this.slotCount;
-      i++
-    ) {
+    for (let i = 0; i < this.slotCount; i++) {
       this.slots.push({
         item: null,
         quantity: 0,
       });
     }
 
-    this.uiContainer =
-      this.scene.add.container(0, 0);
+    this.uiContainer = this.scene.add.container(0, 0);
 
     this.uiContainer.setScrollFactor(0);
     this.uiContainer.setDepth(10000);
@@ -140,48 +135,35 @@ export class InventorySystem {
     this.createUI();
 
     this.uiContainer.each(
-      (
-        child: Phaser.GameObjects.GameObject
-      ) => {
-        (
-          child as Phaser.GameObjects.Image
-        ).setScrollFactor(0);
+      (child: Phaser.GameObjects.GameObject) => {
+        (child as Phaser.GameObjects.Image).setScrollFactor(0);
       }
     );
 
     this.uiContainer.setVisible(false);
 
     if (!scene.input.keyboard) {
-      throw new Error(
-        "Teclado não disponível."
-      );
+      throw new Error("Teclado não disponível.");
     }
 
-    scene.input.keyboard.on(
-      "keydown-I",
-      () => {
-        if (this.inputBlocked) {
-          return;
-        }
-
-        this.toggle();
+    scene.input.keyboard.on("keydown-I", () => {
+      if (this.inputBlocked) {
+        return;
       }
-    );
+
+      this.toggle();
+    });
 
     this.scene.input.on(
       "pointermove",
-      (
-        pointer: Phaser.Input.Pointer
-      ) => {
+      (pointer: Phaser.Input.Pointer) => {
         this.updateDrag(pointer);
       }
     );
 
     this.scene.input.on(
       "pointerup",
-      (
-        pointer: Phaser.Input.Pointer
-      ) => {
+      (pointer: Phaser.Input.Pointer) => {
         this.finishDrag(pointer);
       }
     );
@@ -196,6 +178,186 @@ export class InventorySystem {
   }
 
   // ========================================
+  // ACESSÓRIOS DE SUBCLASSE
+  // ========================================
+
+  /**
+   * Procura a definição de um acessório pelo ID do item.
+   */
+  private findAccessoryByItemId(
+    itemId: string
+  ): SubclassAccessoryDefinition | null {
+    const definition = getSubclassAccessory(itemId);
+
+    if (definition) {
+      return definition;
+    }
+
+    return (
+      SUBCLASS_ACCESSORY_CATALOG.find(
+        (accessory) => accessory.id === itemId
+      ) ?? null
+    );
+  }
+
+  /**
+   * Aceita o ID completo da subclasse ou seu identificador
+   * sem prefixo, por exemplo:
+   *
+   * warrior_samurai -> samurai
+   * knight_royal_knight -> royal_knight
+   * mage_elementalist -> elementalist
+   */
+  private findSubclassAccessory(
+    subclassId: string
+  ): SubclassAccessoryDefinition | null {
+    const normalizedSubclass = this.normalizeIdentifier(subclassId);
+
+    return (
+      SUBCLASS_ACCESSORY_CATALOG.find((accessory) => {
+        const normalizedDefinition = this.normalizeIdentifier(
+          accessory.subclassId
+        );
+
+        return (
+          normalizedDefinition === normalizedSubclass ||
+          normalizedDefinition.endsWith(`_${normalizedSubclass}`) ||
+          normalizedSubclass.endsWith(`_${normalizedDefinition}`)
+        );
+      }) ?? null
+    );
+  }
+
+  private normalizeIdentifier(value: string): string {
+    return value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim()
+      .replace(/[\s-]+/g, "_");
+  }
+
+  /**
+   * Verifica se o acessório já está no inventário
+   * ou equipado em algum slot.
+   */
+  private hasItemOrEquipped(itemId: string): boolean {
+    const inInventory = this.slots.some(
+      (slot) => slot.item?.id === itemId
+    );
+
+    const equipped = this.equipmentSlots.some(
+      (slot) => slot.item?.id === itemId
+    );
+
+    return inInventory || equipped;
+  }
+
+  /**
+   * Cria e adiciona ao inventário o acessório correspondente
+   * à subclasse desbloqueada.
+   *
+   * Este método NÃO equipa o acessório automaticamente.
+   *
+   * Retorna true quando o acessório já existe ou foi adicionado.
+   * Retorna false quando a subclasse não tem acessório cadastrado
+   * ou quando o inventário está cheio.
+   */
+  unlockSubclassAccessory(subclassId: string): boolean {
+    const definition = this.findSubclassAccessory(subclassId);
+
+    if (!definition) {
+      console.warn(
+        `Nenhum acessório cadastrado para a subclasse "${subclassId}".`
+      );
+
+      return false;
+    }
+
+    if (this.hasItemOrEquipped(definition.id)) {
+      return true;
+    }
+
+    const accessory = new Armor({
+      id: definition.id,
+      name: definition.name,
+      type: "armor",
+      description: definition.description,
+      rarity: definition.rarity as ItemRarity,
+      defense: 1,
+      slot: "accessory",
+      attributes: this.getSubclassAccessoryAttributes(
+        definition.subclassId
+      ),
+    });
+
+    const added = this.addItem(accessory, 1);
+
+    if (!added) {
+      console.warn(
+        `Não foi possível adicionar "${definition.name}": inventário cheio.`
+      );
+
+      return false;
+    }
+
+    console.log(
+      `Acessório desbloqueado: ${definition.name}`
+    );
+
+    return true;
+  }
+
+  /**
+   * Define os atributos iniciais dos acessórios de subclasse.
+   * Os nomes usam o mesmo padrão que normalizeAttributeName()
+   * já reconhece no cálculo dos bônus do personagem.
+   */
+  private getSubclassAccessoryAttributes(
+    subclassId: string
+  ): { name: string; value: number }[] {
+    const id = this.normalizeIdentifier(subclassId);
+
+    if (id.includes("samurai")) {
+      return [
+        { name: "Força", value: 2 },
+        { name: "Agilidade", value: 1 },
+      ];
+    }
+
+    if (
+      id.includes("royal_knight") ||
+      id.includes("cavaleiro_real")
+    ) {
+      return [
+        { name: "Vitalidade", value: 2 },
+        { name: "Defesa", value: 1 },
+      ];
+    }
+
+    if (
+      id.includes("elementalist") ||
+      id.includes("elementalista")
+    ) {
+      return [
+        { name: "Inteligência", value: 3 },
+      ];
+    }
+
+    if (
+      id.includes("psychic") ||
+      id.includes("psiquico")
+    ) {
+      return [
+        { name: "Inteligência", value: 2 },
+        { name: "Sorte", value: 1 },
+      ];
+    }
+
+    return [];
+  }
+
+  // ========================================
   // CRIAÇÃO DA INTERFACE
   // ========================================
 
@@ -205,185 +367,119 @@ export class InventorySystem {
     const centerX = camera.width / 2;
     const centerY = camera.height / 2;
 
-    this.inventoryBackground =
-      this.scene.add.rectangle(
-        centerX,
-        centerY,
-        1160,
-        650,
-        0x101218,
-        0.98
-      );
-
-    this.inventoryBackground.setStrokeStyle(
-      2,
-      0x555b66,
-      1
+    this.inventoryBackground = this.scene.add.rectangle(
+      centerX,
+      centerY,
+      1160,
+      650,
+      0x101218,
+      0.98
     );
 
-    this.uiContainer.add(
-      this.inventoryBackground
-    );
+    this.inventoryBackground.setStrokeStyle(2, 0x555b66, 1);
 
-    this.titleText =
-      this.scene.add.text(
-        centerX,
-        centerY - 305,
-        "PERSONAGEM",
-        {
-          fontFamily: "Arial",
-          fontSize: "20px",
-          color: "#e6e6e6",
-          fontStyle: "bold",
-        }
-      );
+    this.uiContainer.add(this.inventoryBackground);
+
+    this.titleText = this.scene.add.text(
+      centerX,
+      centerY - 305,
+      "PERSONAGEM",
+      {
+        fontFamily: "Arial",
+        fontSize: "20px",
+        color: "#e6e6e6",
+        fontStyle: "bold",
+      }
+    );
 
     this.titleText.setOrigin(0.5);
+    this.uiContainer.add(this.titleText);
 
-    this.uiContainer.add(
-      this.titleText
+    this.levelBackground = this.scene.add.rectangle(
+      centerX - 420,
+      centerY - 220,
+      270,
+      65,
+      0x191d24
     );
 
-    this.levelBackground =
-      this.scene.add.rectangle(
-        centerX - 420,
-        centerY - 220,
-        270,
-        65,
-        0x191d24
-      );
+    this.levelBackground.setStrokeStyle(1, 0x777e8a, 1);
+    this.uiContainer.add(this.levelBackground);
 
-    this.levelBackground.setStrokeStyle(
-      1,
-      0x777e8a,
-      1
+    this.levelText = this.scene.add.text(
+      centerX - 420,
+      centerY - 220,
+      "1\nNÍVEL",
+      {
+        fontFamily: "Arial",
+        fontSize: "16px",
+        color: "#ffffff",
+        fontStyle: "bold",
+        align: "center",
+        lineSpacing: 4,
+      }
     );
-
-    this.uiContainer.add(
-      this.levelBackground
-    );
-
-    this.levelText =
-      this.scene.add.text(
-        centerX - 420,
-        centerY - 220,
-        "1\nNÍVEL",
-        {
-          fontFamily: "Arial",
-          fontSize: "16px",
-          color: "#ffffff",
-          fontStyle: "bold",
-          align: "center",
-          lineSpacing: 4,
-        }
-      );
 
     this.levelText.setOrigin(0.5);
+    this.uiContainer.add(this.levelText);
 
-    this.uiContainer.add(
-      this.levelText
+    this.createStatsPanel(centerX - 420, centerY - 40);
+    this.createAttributePanel(centerX - 420, centerY + 195);
+    this.createCharacterEquipment(centerX - 45, centerY + 15);
+    this.createInventoryPanel(centerX + 385, centerY + 15);
+    this.createBottomBars(centerX - 45, centerY + 310);
+
+    this.closeText = this.scene.add.text(
+      centerX + 515,
+      centerY + 305,
+      "[I] FECHAR",
+      {
+        fontFamily: "Arial",
+        fontSize: "12px",
+        color: "#777d87",
+      }
     );
-
-    this.createStatsPanel(
-      centerX - 420,
-      centerY - 40
-    );
-
-    this.createAttributePanel(
-      centerX - 420,
-      centerY + 195
-    );
-
-    this.createCharacterEquipment(
-      centerX - 45,
-      centerY + 15
-    );
-
-    this.createInventoryPanel(
-      centerX + 385,
-      centerY + 15
-    );
-
-    this.createBottomBars(
-      centerX - 45,
-      centerY + 310
-    );
-
-    this.closeText =
-      this.scene.add.text(
-        centerX + 515,
-        centerY + 305,
-        "[I] FECHAR",
-        {
-          fontFamily: "Arial",
-          fontSize: "12px",
-          color: "#777d87",
-        }
-      );
 
     this.closeText.setOrigin(1, 0.5);
-
-    this.uiContainer.add(
-      this.closeText
-    );
+    this.uiContainer.add(this.closeText);
   }
 
-  private createStatsPanel(
-    x: number,
-    y: number
-  ): void {
-    this.statsPanel =
-      this.scene.add.rectangle(
-        x,
-        y,
-        270,
-        250,
-        0x15191f
-      );
-
-    this.statsPanel.setStrokeStyle(
-      1,
-      0x454b55,
-      1
+  private createStatsPanel(x: number, y: number): void {
+    this.statsPanel = this.scene.add.rectangle(
+      x,
+      y,
+      270,
+      250,
+      0x15191f
     );
 
-    this.uiContainer.add(
-      this.statsPanel
-    );
+    this.statsPanel.setStrokeStyle(1, 0x454b55, 1);
+    this.uiContainer.add(this.statsPanel);
 
-    const title =
-      this.scene.add.text(
-        x - 115,
-        y - 112,
-        "STATUS BASE",
-        {
-          fontFamily: "Arial",
-          fontSize: "14px",
-          color: "#d7d9dd",
-          fontStyle: "bold",
-        }
-      );
+    const title = this.scene.add.text(
+      x - 115,
+      y - 112,
+      "STATUS BASE",
+      {
+        fontFamily: "Arial",
+        fontSize: "14px",
+        color: "#d7d9dd",
+        fontStyle: "bold",
+      }
+    );
 
     this.uiContainer.add(title);
 
-    const characterInfoBackground =
-      this.scene.add.rectangle(
-        x,
-        y - 76,
-        235,
-        78,
-        0x11151b
-      );
-
-    characterInfoBackground.setStrokeStyle(
-      1,
-      0x3b414a,
-      1
+    const characterInfoBackground = this.scene.add.rectangle(
+      x,
+      y - 76,
+      235,
+      78,
+      0x11151b
     );
 
-    this.uiContainer.add(
-      characterInfoBackground
-    );
+    characterInfoBackground.setStrokeStyle(1, 0x3b414a, 1);
+    this.uiContainer.add(characterInfoBackground);
 
     const characterInfo = [
       ["CLASSE", this.characterClass],
@@ -391,56 +487,42 @@ export class InventorySystem {
       ["PROFISSÃO", this.characterProfession],
     ];
 
-    characterInfo.forEach(
-      ([name, value], index) => {
-        const rowY =
-          y -
-          103 +
-          index * 24;
+    characterInfo.forEach(([name, value], index) => {
+      const rowY = y - 103 + index * 24;
 
-        const nameText =
-          this.scene.add.text(
-            x - 100,
-            rowY,
-            name,
-            {
-              fontFamily: "Arial",
-              fontSize: "9px",
-              color: "#9298a2",
-              fontStyle: "bold",
-            }
-          );
+      const nameText = this.scene.add.text(
+        x - 100,
+        rowY,
+        name,
+        {
+          fontFamily: "Arial",
+          fontSize: "9px",
+          color: "#9298a2",
+          fontStyle: "bold",
+        }
+      );
 
-        const valueText =
-          this.scene.add.text(
-            x + 100,
-            rowY,
-            value,
-            {
-              fontFamily: "Arial",
-              fontSize: "9px",
-              color: "#eeeeee",
-              fontStyle: "bold",
-              align: "right",
-              wordWrap: {
-                width: 125,
-              },
-            }
-          );
+      const valueText = this.scene.add.text(
+        x + 100,
+        rowY,
+        value,
+        {
+          fontFamily: "Arial",
+          fontSize: "9px",
+          color: "#eeeeee",
+          fontStyle: "bold",
+          align: "right",
+          wordWrap: {
+            width: 125,
+          },
+        }
+      );
 
-        valueText.setOrigin(1, 0);
+      valueText.setOrigin(1, 0);
 
-        this.statsTexts.push(
-          nameText,
-          valueText
-        );
-
-        this.uiContainer.add([
-          nameText,
-          valueText,
-        ]);
-      }
-    );
+      this.statsTexts.push(nameText, valueText);
+      this.uiContainer.add([nameText, valueText]);
+    });
 
     const stats = [
       ["VIDA", "100 / 100"],
@@ -452,105 +534,77 @@ export class InventorySystem {
       ["INTELIGÊNCIA", "1"],
     ];
 
-    stats.forEach(
-      ([name, value], index) => {
-        const rowY =
-          y -
-          24 +
-          index * 18;
+    stats.forEach(([name, value], index) => {
+      const rowY = y - 24 + index * 18;
 
-        const nameText =
-          this.scene.add.text(
-            x - 110,
-            rowY,
-            name,
-            {
-              fontFamily: "Arial",
-              fontSize: "9px",
-              color: "#9298a2",
-            }
-          );
-
-        const valueText =
-          this.scene.add.text(
-            x + 105,
-            rowY,
-            value,
-            {
-              fontFamily: "Arial",
-              fontSize: "9px",
-              color: "#eeeeee",
-              fontStyle: "bold",
-            }
-          );
-
-        valueText.setOrigin(1, 0);
-
-        this.statsTexts.push(
-          nameText,
-          valueText
-        );
-
-        this.uiContainer.add([
-          nameText,
-          valueText,
-        ]);
-      }
-    );
-  }
-
-  private createAttributePanel(
-    x: number,
-    y: number
-  ): void {
-    this.attributePanel =
-      this.scene.add.rectangle(
-        x,
-        y,
-        270,
-        205,
-        0x15191f
-      );
-
-    this.attributePanel.setStrokeStyle(
-      1,
-      0x454b55,
-      1
-    );
-
-    this.uiContainer.add(
-      this.attributePanel
-    );
-
-    const title =
-      this.scene.add.text(
-        x - 115,
-        y - 88,
-        "ATRIBUTOS",
+      const nameText = this.scene.add.text(
+        x - 110,
+        rowY,
+        name,
         {
           fontFamily: "Arial",
-          fontSize: "14px",
-          color: "#d7d9dd",
+          fontSize: "9px",
+          color: "#9298a2",
+        }
+      );
+
+      const valueText = this.scene.add.text(
+        x + 105,
+        rowY,
+        value,
+        {
+          fontFamily: "Arial",
+          fontSize: "9px",
+          color: "#eeeeee",
           fontStyle: "bold",
         }
       );
 
+      valueText.setOrigin(1, 0);
+
+      this.statsTexts.push(nameText, valueText);
+      this.uiContainer.add([nameText, valueText]);
+    });
+  }
+
+  private createAttributePanel(x: number, y: number): void {
+    this.attributePanel = this.scene.add.rectangle(
+      x,
+      y,
+      270,
+      205,
+      0x15191f
+    );
+
+    this.attributePanel.setStrokeStyle(1, 0x454b55, 1);
+    this.uiContainer.add(this.attributePanel);
+
+    const title = this.scene.add.text(
+      x - 115,
+      y - 88,
+      "ATRIBUTOS",
+      {
+        fontFamily: "Arial",
+        fontSize: "14px",
+        color: "#d7d9dd",
+        fontStyle: "bold",
+      }
+    );
+
     this.uiContainer.add(title);
 
-    const points =
-      this.scene.add.text(
-        x + 115,
-        y - 88,
-        "PONTOS: 0",
-        {
-          fontFamily: "Arial",
-          fontSize: "11px",
-          color: "#858c96",
-        }
-      );
+    const points = this.scene.add.text(
+      x + 115,
+      y - 88,
+      "PONTOS: 0",
+      {
+        fontFamily: "Arial",
+        fontSize: "11px",
+        color: "#858c96",
+      }
+    );
 
     points.setOrigin(1, 0);
-
     this.uiContainer.add(points);
 
     const attributes = [
@@ -562,175 +616,127 @@ export class InventorySystem {
       "INTELIGÊNCIA",
     ];
 
-    attributes.forEach(
-      (name, index) => {
-        const rowY =
-          y -
-          55 +
-          index * 25;
+    attributes.forEach((name, index) => {
+      const rowY = y - 55 + index * 25;
 
-        const nameText =
-          this.scene.add.text(
-            x - 110,
-            rowY,
-            name,
-            {
-              fontFamily: "Arial",
-              fontSize: "10px",
-              color: "#a0a5ad",
-            }
-          );
+      const nameText = this.scene.add.text(
+        x - 110,
+        rowY,
+        name,
+        {
+          fontFamily: "Arial",
+          fontSize: "10px",
+          color: "#a0a5ad",
+        }
+      );
 
-        const valueText =
-          this.scene.add.text(
-            x + 35,
-            rowY,
-            "1",
-            {
-              fontFamily: "Arial",
-              fontSize: "10px",
-              color: "#eeeeee",
-              fontStyle: "bold",
-            }
-          );
+      const valueText = this.scene.add.text(
+        x + 35,
+        rowY,
+        "1",
+        {
+          fontFamily: "Arial",
+          fontSize: "10px",
+          color: "#eeeeee",
+          fontStyle: "bold",
+        }
+      );
 
-        const plus =
-          this.scene.add.rectangle(
-            x + 105,
-            rowY + 6,
-            20,
-            20,
-            0x252a32
-          );
+      const plus = this.scene.add.rectangle(
+        x + 105,
+        rowY + 6,
+        20,
+        20,
+        0x252a32
+      );
 
-        plus.setStrokeStyle(
-          1,
-          0x555c67,
-          1
-        );
+      plus.setStrokeStyle(1, 0x555c67, 1);
 
-        const plusText =
-          this.scene.add.text(
-            x + 105,
-            rowY + 6,
-            "+",
-            {
-              fontFamily: "Arial",
-              fontSize: "14px",
-              color: "#bfc4cc",
-              fontStyle: "bold",
-            }
-          );
+      const plusText = this.scene.add.text(
+        x + 105,
+        rowY + 6,
+        "+",
+        {
+          fontFamily: "Arial",
+          fontSize: "14px",
+          color: "#bfc4cc",
+          fontStyle: "bold",
+        }
+      );
 
-        plusText.setOrigin(0.5);
+      plusText.setOrigin(0.5);
 
-        this.attributeTexts.push(
-          nameText,
-          valueText,
-          plusText
-        );
-
-        this.uiContainer.add([
-          nameText,
-          valueText,
-          plus,
-          plusText,
-        ]);
-      }
-    );
+      this.attributeTexts.push(nameText, valueText, plusText);
+      this.uiContainer.add([nameText, valueText, plus, plusText]);
+    });
   }
 
   // ========================================
   // EQUIPAMENTOS
   // ========================================
 
-  private createCharacterEquipment(
-    x: number,
-    y: number
-  ): void {
-    this.characterPanel =
-      this.scene.add.rectangle(
-        x,
-        y,
-        405,
-        510,
-        0x15191f
-      );
-
-    this.characterPanel.setStrokeStyle(
-      1,
-      0x454b55,
-      1
+  private createCharacterEquipment(x: number, y: number): void {
+    this.characterPanel = this.scene.add.rectangle(
+      x,
+      y,
+      405,
+      510,
+      0x15191f
     );
 
-    this.uiContainer.add(
-      this.characterPanel
-    );
+    this.characterPanel.setStrokeStyle(1, 0x454b55, 1);
+    this.uiContainer.add(this.characterPanel);
 
-    const title =
-      this.scene.add.text(
-        x,
-        y - 225,
-        "EQUIPAMENTOS",
-        {
-          fontFamily: "Arial",
-          fontSize: "14px",
-          color: "#d7d9dd",
-          fontStyle: "bold",
-        }
-      );
+    const title = this.scene.add.text(
+      x,
+      y - 225,
+      "EQUIPAMENTOS",
+      {
+        fontFamily: "Arial",
+        fontSize: "14px",
+        color: "#d7d9dd",
+        fontStyle: "bold",
+      }
+    );
 
     title.setOrigin(0.5);
-
     this.uiContainer.add(title);
 
-    this.characterHead =
-      this.scene.add.ellipse(
-        x,
-        y - 45,
-        38,
-        38,
-        0x3498db
-      );
-
-    this.characterHead.setStrokeStyle(
-      2,
-      0x6ec6ff,
-      1
+    this.characterHead = this.scene.add.ellipse(
+      x,
+      y - 45,
+      38,
+      38,
+      0x3498db
     );
 
-    this.characterBody =
-      this.scene.add.rectangle(
-        x,
-        y + 25,
-        50,
-        82,
-        0x3498db
-      );
+    this.characterHead.setStrokeStyle(2, 0x6ec6ff, 1);
 
-    this.characterBody.setStrokeStyle(
-      2,
-      0x6ec6ff,
-      1
+    this.characterBody = this.scene.add.rectangle(
+      x,
+      y + 25,
+      50,
+      82,
+      0x3498db
     );
 
-    this.characterLegLeft =
-      this.scene.add.rectangle(
-        x - 14,
-        y + 87,
-        14,
-        38,
-        0x246b9c
-      );
+    this.characterBody.setStrokeStyle(2, 0x6ec6ff, 1);
 
-    this.characterLegRight =
-      this.scene.add.rectangle(
-        x + 14,
-        y + 87,
-        14,
-        38,
-        0x246b9c
-      );
+    this.characterLegLeft = this.scene.add.rectangle(
+      x - 14,
+      y + 87,
+      14,
+      38,
+      0x246b9c
+    );
+
+    this.characterLegRight = this.scene.add.rectangle(
+      x + 14,
+      y + 87,
+      14,
+      38,
+      0x246b9c
+    );
 
     this.uiContainer.add([
       this.characterHead,
@@ -742,433 +748,67 @@ export class InventorySystem {
     const slotSize = 58;
 
     const positions = [
-      {
-        id: "helmet",
-        name: "CAPACETE",
-        x: x - 150,
-        y: y - 145,
-      },
-      {
-        id: "shoulder",
-        name: "OMBRO",
-        x: x - 150,
-        y: y - 70,
-      },
-      {
-        id: "chest",
-        name: "PEITORAL",
-        x: x - 150,
-        y: y + 5,
-      },
-      {
-        id: "necklace",
-        name: "COLAR",
-        x: x - 150,
-        y: y + 80,
-      },
-      {
-        id: "gloves",
-        name: "LUVA",
-        x: x - 150,
-        y: y + 155,
-      },
-
-      {
-        id: "weapon",
-        name: "ARMA",
-        x: x + 150,
-        y: y - 145,
-      },
-      {
-        id: "offhand",
-        name: "SECUNDÁRIA",
-        x: x + 150,
-        y: y - 70,
-      },
-      {
-        id: "boots",
-        name: "BOTAS",
-        x: x + 150,
-        y: y + 5,
-      },
-      {
-        id: "accessory",
-        name: "ACESSÓRIO",
-        x: x + 150,
-        y: y + 80,
-      },
-      {
-        id: "ring",
-        name: "ANEL",
-        x: x + 150,
-        y: y + 155,
-      },
-
-      {
-        id: "belt",
-        name: "CINTO",
-        x: x - 90,
-        y: y + 205,
-      },
-      {
-        id: "amulet",
-        name: "AMULETO",
-        x: x - 30,
-        y: y + 205,
-      },
-      {
-        id: "relic",
-        name: "RELIQUIA",
-        x: x + 30,
-        y: y + 205,
-      },
+      { id: "helmet", name: "CAPACETE", x: x - 150, y: y - 145 },
+      { id: "shoulder", name: "OMBRO", x: x - 150, y: y - 70 },
+      { id: "chest", name: "PEITORAL", x: x - 150, y: y + 5 },
+      { id: "necklace", name: "COLAR", x: x - 150, y: y + 80 },
+      { id: "gloves", name: "LUVA", x: x - 150, y: y + 155 },
+      { id: "weapon", name: "ARMA", x: x + 150, y: y - 145 },
+      { id: "offhand", name: "SECUNDÁRIA", x: x + 150, y: y - 70 },
+      { id: "boots", name: "BOTAS", x: x + 150, y: y + 5 },
+      { id: "accessory", name: "ACESSÓRIO", x: x + 150, y: y + 80 },
+      { id: "ring", name: "ANEL", x: x + 150, y: y + 155 },
+      { id: "belt", name: "CINTO", x: x - 90, y: y + 205 },
+      { id: "amulet", name: "AMULETO", x: x - 30, y: y + 205 },
+      { id: "relic", name: "RELIQUIA", x: x + 30, y: y + 205 },
     ];
 
-    positions.forEach(
-      (
-        position,
-        index
-      ) => {
-        const background =
-          this.scene.add.rectangle(
-            position.x,
-            position.y,
-            slotSize,
-            slotSize,
-            0x20252d
-          );
-
-        background.setStrokeStyle(
-          1,
-          0x555c67,
-          1
-        );
-
-        const label =
-          this.scene.add.text(
-            position.x,
-            position.y + 38,
-            position.name,
-            {
-              fontFamily: "Arial",
-              fontSize: "7px",
-              color: "#737a85",
-              align: "center",
-            }
-          );
-
-        label.setOrigin(0.5);
-
-        const equipmentSlot: EquipmentSlot =
-          {
-            id: position.id,
-            name: position.name,
-            item: null,
-            background,
-            icon: null,
-            label,
-          };
-
-        this.equipmentSlots.push(
-          equipmentSlot
-        );
-
-        this.uiContainer.add([
-          background,
-          label,
-        ]);
-
-        background.setInteractive({
-          useHandCursor: true,
-        });
-
-        background.on(
-          "pointerdown",
-          (
-            pointer: Phaser.Input.Pointer
-          ) => {
-            this.startEquipmentDrag(
-              index,
-              pointer
-            );
-          }
-        );
-      }
-    );
-  }
-
-  // ========================================
-  // INVENTÁRIO
-  // ========================================
-
-  private createInventoryPanel(
-    x: number,
-    y: number
-  ): void {
-    this.inventoryPanel =
-      this.scene.add.rectangle(
-        x,
-        y,
-        330,
-        510,
-        0x15191f
+    positions.forEach((position, index) => {
+      const background = this.scene.add.rectangle(
+        position.x,
+        position.y,
+        slotSize,
+        slotSize,
+        0x20252d
       );
 
-    this.inventoryPanel.setStrokeStyle(
-      1,
-      0x454b55,
-      1
-    );
+      background.setStrokeStyle(1, 0x555c67, 1);
 
-    this.uiContainer.add(
-      this.inventoryPanel
-    );
-
-    const title =
-      this.scene.add.text(
-        x,
-        y - 225,
-        "INVENTÁRIO",
+      const label = this.scene.add.text(
+        position.x,
+        position.y + 38,
+        position.name,
         {
           fontFamily: "Arial",
-          fontSize: "14px",
-          color: "#d7d9dd",
-          fontStyle: "bold",
+          fontSize: "7px",
+          color: "#737a85",
+          align: "center",
         }
       );
 
-    title.setOrigin(0.5);
+      label.setOrigin(0.5);
 
-    this.uiContainer.add(title);
+      // Graphics permanente para o ícone personalizado.
+      // Ele é reutilizado para evitar criar objetos a cada atualização.
+      const customIcon = this.scene.add.graphics();
+      customIcon.setVisible(false);
 
-    const categories: {
-      label: string;
-      category: InventoryCategory;
-    }[] = [
-      {
-        label: "TODOS",
-        category: "all",
-      },
-      {
-        label: "ARM",
-        category: "weapon",
-      },
-      {
-        label: "DEF",
-        category: "armor",
-      },
-      {
-        label: "POÇ",
-        category: "potion",
-      },
-      {
-        label: "MAT",
-        category: "material",
-      },
-      {
-        label: "QUEST",
-        category: "quest",
-      },
-    ];
+      const equipmentSlot: EquipmentSlot = {
+        id: position.id,
+        name: position.name,
+        item: null,
+        background,
+        icon: null,
+        customIcon,
+        label,
+      };
 
-    const buttonWidth = 43;
-    const gap = 7;
-
-    const totalWidth =
-      categories.length *
-        buttonWidth +
-      (categories.length - 1) *
-        gap;
-
-    const startX =
-      x -
-      totalWidth / 2 +
-      buttonWidth / 2;
-
-    categories.forEach(
-      (
-        categoryData,
-        index
-      ) => {
-        const buttonX =
-          startX +
-          index *
-            (buttonWidth + gap);
-
-        const button =
-          this.scene.add.rectangle(
-            buttonX,
-            y - 190,
-            buttonWidth,
-            27,
-            index === 0
-              ? 0x353b45
-              : 0x20252d
-          );
-
-        button.setStrokeStyle(
-          index === 0 ? 2 : 1,
-          index === 0
-            ? 0x8a929d
-            : 0x555c67,
-          1
-        );
-
-        const text =
-          this.scene.add.text(
-            buttonX,
-            y - 190,
-            categoryData.label,
-            {
-              fontFamily: "Arial",
-              fontSize: "8px",
-              color:
-                index === 0
-                  ? "#ffffff"
-                  : "#858c96",
-              fontStyle: "bold",
-            }
-          );
-
-        text.setOrigin(0.5);
-
-        button.setInteractive({
-          useHandCursor: true,
-        });
-
-        text.setInteractive({
-          useHandCursor: true,
-        });
-
-        button.on(
-          "pointerdown",
-          () => {
-            this.setCategory(
-              categoryData.category
-            );
-          }
-        );
-
-        text.on(
-          "pointerdown",
-          () => {
-            this.setCategory(
-              categoryData.category
-            );
-          }
-        );
-
-        this.categoryButtons.push(
-          button
-        );
-
-        this.categoryTexts.push(
-          text
-        );
-
-        this.uiContainer.add([
-          button,
-          text,
-        ]);
-      }
-    );
-
-    const columns = 6;
-    const slotSize = 43;
-    const spacing = 7;
-
-    const gridWidth =
-      columns *
-        slotSize +
-      (columns - 1) *
-        spacing;
-
-    const gridStartX =
-      x -
-      gridWidth / 2 +
-      slotSize / 2;
-
-    const gridStartY =
-      y - 135;
-
-    for (
-      let i = 0;
-      i < this.slotCount;
-      i++
-    ) {
-      const column =
-        i % columns;
-
-      const row =
-        Math.floor(i / columns);
-
-      const slotX =
-        gridStartX +
-        column *
-          (slotSize + spacing);
-
-      const slotY =
-        gridStartY +
-        row *
-          (slotSize + spacing);
-
-      const background =
-        this.scene.add.rectangle(
-          slotX,
-          slotY,
-          slotSize,
-          slotSize,
-          0x20252d
-        );
-
-      background.setStrokeStyle(
-        1,
-        0x454b55,
-        1
-      );
-
-      const icon =
-        this.scene.add.image(
-          slotX,
-          slotY,
-          "slime_gel"
-        );
-
-      icon.setVisible(false);
-
-      const quantityText =
-        this.scene.add.text(
-          slotX + 17,
-          slotY + 16,
-          "",
-          {
-            fontFamily: "Arial",
-            fontSize: "9px",
-            color: "#ffffff",
-            fontStyle: "bold",
-            stroke: "#000000",
-            strokeThickness: 2,
-          }
-        );
-
-      quantityText.setOrigin(1, 1);
-
-      this.inventorySlotBackgrounds.push(
-        background
-      );
-
-      this.inventorySlotIcons.push(
-        icon
-      );
-
-      this.inventorySlotTexts.push(
-        quantityText
-      );
+      this.equipmentSlots.push(equipmentSlot);
 
       this.uiContainer.add([
         background,
-        icon,
-        quantityText,
+        label,
+        customIcon,
       ]);
 
       background.setInteractive({
@@ -1177,120 +817,267 @@ export class InventorySystem {
 
       background.on(
         "pointerdown",
-        (
-          pointer: Phaser.Input.Pointer
-        ) => {
-          this.startInventoryDrag(
-            i,
-            pointer
-          );
+        (pointer: Phaser.Input.Pointer) => {
+          this.startEquipmentDrag(index, pointer);
         }
       );
+    });
+  }
 
-      icon.setInteractive({
-        useHandCursor: true,
-      });
+  // ========================================
+  // INVENTÁRIO
+  // ========================================
 
-      icon.on(
-        "pointerdown",
-        (
-          pointer: Phaser.Input.Pointer
-        ) => {
-          this.startInventoryDrag(
-            i,
-            pointer
-          );
-        }
-      );
-
-      quantityText.setInteractive({
-        useHandCursor: true,
-      });
-
-      quantityText.on(
-        "pointerdown",
-        (
-          pointer: Phaser.Input.Pointer
-        ) => {
-          this.startInventoryDrag(
-            i,
-            pointer
-          );
-        }
-      );
-    }
-
-    this.itemInfoPanel =
-      this.scene.add.rectangle(
-        x,
-        y + 190,
-        292,
-        105,
-        0x11151b
-      );
-
-    this.itemInfoPanel.setStrokeStyle(
-      1,
-      0x3f454f,
-      1
+  private createInventoryPanel(x: number, y: number): void {
+    this.inventoryPanel = this.scene.add.rectangle(
+      x,
+      y,
+      330,
+      510,
+      0x15191f
     );
 
-    this.itemNameText =
-      this.scene.add.text(
-        x - 128,
-        y + 155,
-        "Nenhum item selecionado",
+    this.inventoryPanel.setStrokeStyle(1, 0x454b55, 1);
+    this.uiContainer.add(this.inventoryPanel);
+
+    const title = this.scene.add.text(
+      x,
+      y - 225,
+      "INVENTÁRIO",
+      {
+        fontFamily: "Arial",
+        fontSize: "14px",
+        color: "#d7d9dd",
+        fontStyle: "bold",
+      }
+    );
+
+    title.setOrigin(0.5);
+    this.uiContainer.add(title);
+
+    const categories: {
+      label: string;
+      category: InventoryCategory;
+    }[] = [
+      { label: "TODOS", category: "all" },
+      { label: "ARM", category: "weapon" },
+      { label: "DEF", category: "armor" },
+      { label: "POÇ", category: "potion" },
+      { label: "MAT", category: "material" },
+      { label: "QUEST", category: "quest" },
+    ];
+
+    const buttonWidth = 43;
+    const gap = 7;
+
+    const totalWidth =
+      categories.length * buttonWidth +
+      (categories.length - 1) * gap;
+
+    const startX = x - totalWidth / 2 + buttonWidth / 2;
+
+    categories.forEach((categoryData, index) => {
+      const buttonX = startX + index * (buttonWidth + gap);
+
+      const button = this.scene.add.rectangle(
+        buttonX,
+        y - 190,
+        buttonWidth,
+        27,
+        index === 0 ? 0x353b45 : 0x20252d
+      );
+
+      button.setStrokeStyle(
+        index === 0 ? 2 : 1,
+        index === 0 ? 0x8a929d : 0x555c67,
+        1
+      );
+
+      const text = this.scene.add.text(
+        buttonX,
+        y - 190,
+        categoryData.label,
         {
           fontFamily: "Arial",
-          fontSize: "12px",
-          color: "#e8e8e8",
+          fontSize: "8px",
+          color: index === 0 ? "#ffffff" : "#858c96",
           fontStyle: "bold",
-          wordWrap: {
-            width: 255,
-          },
         }
       );
 
-    this.itemDescriptionText =
-      this.scene.add.text(
-        x - 128,
-        y + 178,
-        "Selecione um item para ver seus detalhes.",
-        {
-          fontFamily: "Arial",
-          fontSize: "9px",
-          color: "#7f8792",
-          wordWrap: {
-            width: 255,
-          },
-          lineSpacing: 3,
-        }
+      text.setOrigin(0.5);
+
+      button.setInteractive({ useHandCursor: true });
+      text.setInteractive({ useHandCursor: true });
+
+      button.on("pointerdown", () => {
+        this.setCategory(categoryData.category);
+      });
+
+      text.on("pointerdown", () => {
+        this.setCategory(categoryData.category);
+      });
+
+      this.categoryButtons.push(button);
+      this.categoryTexts.push(text);
+
+      this.uiContainer.add([button, text]);
+    });
+
+    const columns = 6;
+    const slotSize = 43;
+    const spacing = 7;
+
+    const gridWidth =
+      columns * slotSize +
+      (columns - 1) * spacing;
+
+    const gridStartX = x - gridWidth / 2 + slotSize / 2;
+    const gridStartY = y - 135;
+
+    for (let i = 0; i < this.slotCount; i++) {
+      const column = i % columns;
+      const row = Math.floor(i / columns);
+
+      const slotX = gridStartX + column * (slotSize + spacing);
+      const slotY = gridStartY + row * (slotSize + spacing);
+
+      const background = this.scene.add.rectangle(
+        slotX,
+        slotY,
+        slotSize,
+        slotSize,
+        0x20252d
       );
 
-    this.itemRarityText =
-      this.scene.add.text(
-        x - 128,
-        y + 211,
+      background.setStrokeStyle(1, 0x454b55, 1);
+
+      const icon = this.scene.add.image(
+        slotX,
+        slotY,
+        "slime_gel"
+      );
+
+      icon.setVisible(false);
+
+      // Ícone gráfico para os acessórios de subclasse.
+      const customIcon = this.scene.add.graphics();
+      customIcon.setVisible(false);
+
+      const quantityText = this.scene.add.text(
+        slotX + 17,
+        slotY + 16,
         "",
         {
           fontFamily: "Arial",
           fontSize: "9px",
           color: "#ffffff",
           fontStyle: "bold",
+          stroke: "#000000",
+          strokeThickness: 2,
         }
       );
 
-    this.itemQuantityText =
-      this.scene.add.text(
-        x + 128,
-        y + 211,
-        "",
-        {
-          fontFamily: "Arial",
-          fontSize: "10px",
-          color: "#aeb4bd",
+      quantityText.setOrigin(1, 1);
+
+      this.inventorySlotBackgrounds.push(background);
+      this.inventorySlotIcons.push(icon);
+      this.inventorySlotCustomIcons.push(customIcon);
+      this.inventorySlotTexts.push(quantityText);
+
+      this.uiContainer.add([
+        background,
+        icon,
+        customIcon,
+        quantityText,
+      ]);
+
+      background.setInteractive({ useHandCursor: true });
+
+      background.on(
+        "pointerdown",
+        (pointer: Phaser.Input.Pointer) => {
+          this.startInventoryDrag(i, pointer);
         }
       );
+
+      icon.setInteractive({ useHandCursor: true });
+
+      icon.on(
+        "pointerdown",
+        (pointer: Phaser.Input.Pointer) => {
+          this.startInventoryDrag(i, pointer);
+        }
+      );
+
+      quantityText.setInteractive({ useHandCursor: true });
+
+      quantityText.on(
+        "pointerdown",
+        (pointer: Phaser.Input.Pointer) => {
+          this.startInventoryDrag(i, pointer);
+        }
+      );
+    }
+
+    this.itemInfoPanel = this.scene.add.rectangle(
+      x,
+      y + 190,
+      292,
+      105,
+      0x11151b
+    );
+
+    this.itemInfoPanel.setStrokeStyle(1, 0x3f454f, 1);
+
+    this.itemNameText = this.scene.add.text(
+      x - 128,
+      y + 155,
+      "Nenhum item selecionado",
+      {
+        fontFamily: "Arial",
+        fontSize: "12px",
+        color: "#e8e8e8",
+        fontStyle: "bold",
+        wordWrap: { width: 255 },
+      }
+    );
+
+    this.itemDescriptionText = this.scene.add.text(
+      x - 128,
+      y + 178,
+      "Selecione um item para ver seus detalhes.",
+      {
+        fontFamily: "Arial",
+        fontSize: "9px",
+        color: "#7f8792",
+        wordWrap: { width: 255 },
+        lineSpacing: 3,
+      }
+    );
+
+    this.itemRarityText = this.scene.add.text(
+      x - 128,
+      y + 211,
+      "",
+      {
+        fontFamily: "Arial",
+        fontSize: "9px",
+        color: "#ffffff",
+        fontStyle: "bold",
+      }
+    );
+
+    this.itemQuantityText = this.scene.add.text(
+      x + 128,
+      y + 211,
+      "",
+      {
+        fontFamily: "Arial",
+        fontSize: "10px",
+        color: "#aeb4bd",
+      }
+    );
 
     this.itemQuantityText.setOrigin(1, 0);
 
@@ -1305,56 +1092,45 @@ export class InventorySystem {
     // ========================================
     // PAINEL DE ATRIBUTOS DO ITEM
     // ========================================
-    // Este painel fica separado da descrição e
-    // aparece ao lado do item selecionado.
 
-    this.itemAttributesPanel =
-      this.scene.add.rectangle(
-        x,
-        y,
-        112,
-        68,
-        0x11151b,
-        0.98
-      );
-
-    this.itemAttributesPanel.setStrokeStyle(
-      1,
-      0x59616c,
-      1
+    this.itemAttributesPanel = this.scene.add.rectangle(
+      x,
+      y,
+      112,
+      68,
+      0x11151b,
+      0.98
     );
 
-    this.itemAttributesTitle =
-      this.scene.add.text(
-        x,
-        y - 27,
-        "ATRIBUTOS",
-        {
-          fontFamily: "Arial",
-          fontSize: "8px",
-          color: "#d7d9dd",
-          fontStyle: "bold",
-          align: "center",
-        }
-      );
+    this.itemAttributesPanel.setStrokeStyle(1, 0x59616c, 1);
+
+    this.itemAttributesTitle = this.scene.add.text(
+      x,
+      y - 27,
+      "ATRIBUTOS",
+      {
+        fontFamily: "Arial",
+        fontSize: "8px",
+        color: "#d7d9dd",
+        fontStyle: "bold",
+        align: "center",
+      }
+    );
 
     this.itemAttributesTitle.setOrigin(0.5);
 
-    this.itemAttributesText =
-      this.scene.add.text(
-        x - 47,
-        y - 12,
-        "",
-        {
-          fontFamily: "Arial",
-          fontSize: "8px",
-          color: "#bfc4cc",
-          lineSpacing: 4,
-          wordWrap: {
-            width: 94,
-          },
-        }
-      );
+    this.itemAttributesText = this.scene.add.text(
+      x - 47,
+      y - 12,
+      "",
+      {
+        fontFamily: "Arial",
+        fontSize: "8px",
+        color: "#bfc4cc",
+        lineSpacing: 4,
+        wordWrap: { width: 94 },
+      }
+    );
 
     this.uiContainer.add([
       this.itemAttributesPanel,
@@ -1367,85 +1143,68 @@ export class InventorySystem {
     this.itemAttributesText.setVisible(false);
   }
 
-  private createBottomBars(
-    x: number,
-    y: number
-  ): void {
-    this.healthBarBackground =
-      this.scene.add.rectangle(
-        x - 120,
-        y,
-        210,
-        13,
-        0x252a32
-      );
-
-    this.healthBarBackground.setStrokeStyle(
-      1,
-      0x4a505a,
-      1
+  private createBottomBars(x: number, y: number): void {
+    this.healthBarBackground = this.scene.add.rectangle(
+      x - 120,
+      y,
+      210,
+      13,
+      0x252a32
     );
 
-    this.healthBar =
-      this.scene.add.rectangle(
-        x - 120,
-        y,
-        206,
-        9,
-        0x2ecc71
-      );
+    this.healthBarBackground.setStrokeStyle(1, 0x4a505a, 1);
 
-    this.healthBarText =
-      this.scene.add.text(
-        x - 120,
-        y,
-        "HP 100 / 100",
-        {
-          fontFamily: "Arial",
-          fontSize: "8px",
-          color: "#ffffff",
-          fontStyle: "bold",
-        }
-      );
+    this.healthBar = this.scene.add.rectangle(
+      x - 120,
+      y,
+      206,
+      9,
+      0x2ecc71
+    );
+
+    this.healthBarText = this.scene.add.text(
+      x - 120,
+      y,
+      "HP 100 / 100",
+      {
+        fontFamily: "Arial",
+        fontSize: "8px",
+        color: "#ffffff",
+        fontStyle: "bold",
+      }
+    );
 
     this.healthBarText.setOrigin(0.5);
 
-    this.staminaBarBackground =
-      this.scene.add.rectangle(
-        x + 120,
-        y,
-        210,
-        13,
-        0x252a32
-      );
-
-    this.staminaBarBackground.setStrokeStyle(
-      1,
-      0x4a505a,
-      1
+    this.staminaBarBackground = this.scene.add.rectangle(
+      x + 120,
+      y,
+      210,
+      13,
+      0x252a32
     );
 
-    this.staminaBar =
-      this.scene.add.rectangle(
-        x + 120,
-        y,
-        206,
-        9,
-        0x3498db
-      );
+    this.staminaBarBackground.setStrokeStyle(1, 0x4a505a, 1);
 
-    this.staminaBarText =
-      this.scene.add.text(
-        x + 120,
-        y,
-        "STAMINA 100 / 100",
-        {
-          fontFamily: "Arial",
-          fontSize: "8px",
-          color: "#ffffff",
-          fontStyle: "bold",
-        }
-      );
+    this.staminaBar = this.scene.add.rectangle(
+      x + 120,
+      y,
+      206,
+      9,
+      0x3498db
+    );
+
+    this.staminaBarText = this.scene.add.text(
+      x + 120,
+      y,
+      "STAMINA 100 / 100",
+      {
+        fontFamily: "Arial",
+        fontSize: "8px",
+        color: "#ffffff",
+        fontStyle: "bold",
+      }
+    );
 
     this.staminaBarText.setOrigin(0.5);
 
@@ -1467,30 +1226,21 @@ export class InventorySystem {
     index: number,
     pointer: Phaser.Input.Pointer
   ): void {
-    if (
-      !this.inventoryOpen ||
-      this.isDragging
-    ) {
+    if (!this.inventoryOpen || this.isDragging) {
       return;
     }
 
-    const slot =
-      this.slots[index];
+    const slot = this.slots[index];
 
     if (!slot || !slot.item) {
       return;
     }
 
-    if (
-      !this.itemMatchesCategory(
-        slot.item
-      )
-    ) {
+    if (!this.itemMatchesCategory(slot.item)) {
       return;
     }
 
     this.selectedSlot = index;
-
     this.updateSelectionVisuals();
 
     this.isDragging = true;
@@ -1499,10 +1249,7 @@ export class InventorySystem {
     this.dragItem = slot.item;
     this.dragQuantity = slot.quantity;
 
-    this.createDragVisual(
-      slot.item
-    );
-
+    this.createDragVisual(slot.item);
     this.updateDrag(pointer);
   }
 
@@ -1510,15 +1257,11 @@ export class InventorySystem {
     index: number,
     pointer: Phaser.Input.Pointer
   ): void {
-    if (
-      !this.inventoryOpen ||
-      this.isDragging
-    ) {
+    if (!this.inventoryOpen || this.isDragging) {
       return;
     }
 
-    const slot =
-      this.equipmentSlots[index];
+    const slot = this.equipmentSlots[index];
 
     if (!slot || !slot.item) {
       return;
@@ -1530,149 +1273,115 @@ export class InventorySystem {
     this.dragItem = slot.item;
     this.dragQuantity = 1;
 
-    this.createDragVisual(
-      slot.item
-    );
-
+    this.createDragVisual(slot.item);
     this.updateDrag(pointer);
   }
 
-  private createDragVisual(
-    item: Item
-  ): void {
+  private createDragVisual(item: Item): void {
     this.destroyDragVisual();
 
-    const container =
-      this.scene.add.container(
-        0,
-        0
-      );
-
+    const container = this.scene.add.container(0, 0);
     container.setDepth(20000);
 
-    const background =
-      this.scene.add.rectangle(
-        0,
-        0,
-        52,
-        52,
-        0x11151b,
-        0.92
-      );
+    const background = this.scene.add.rectangle(
+      0,
+      0,
+      52,
+      52,
+      0x11151b,
+      0.92
+    );
 
     background.setStrokeStyle(
       2,
-      this.getRarityColorNumber(
-        item.rarity
-      ),
+      this.getRarityColorNumber(item.rarity),
       1
     );
 
-    const text =
-      this.scene.add.text(
+    container.add(background);
+
+    const accessory = this.findAccessoryByItemId(item.id);
+
+    if (accessory) {
+      // O desenho é gerado pelo mesmo catálogo visual
+      // utilizado pelos ícones dos slots.
+      const customIcon = this.scene.add.graphics();
+
+      drawSubclassAccessoryFront(
+        customIcon,
+        accessory.subclassId,
+        -17,
+        -17,
+        34
+      );
+
+      container.add(customIcon);
+    } else {
+      const text = this.scene.add.text(
         0,
         0,
-        item.name.substring(
-          0,
-          12
-        ),
+        item.name.substring(0, 12),
         {
           fontFamily: "Arial",
           fontSize: "7px",
           color: "#ffffff",
           fontStyle: "bold",
           align: "center",
-          wordWrap: {
-            width: 44,
-          },
+          wordWrap: { width: 44 },
         }
       );
 
-    text.setOrigin(0.5);
-
-    container.add([
-      background,
-      text,
-    ]);
+      text.setOrigin(0.5);
+      container.add(text);
+    }
 
     this.dragVisual = container;
   }
 
-  private updateDrag(
-    pointer: Phaser.Input.Pointer
-  ): void {
-    if (
-      !this.isDragging ||
-      !this.dragVisual
-    ) {
+  private updateDrag(pointer: Phaser.Input.Pointer): void {
+    if (!this.isDragging || !this.dragVisual) {
       return;
     }
 
-    this.dragVisual.setPosition(
-      pointer.x,
-      pointer.y
-    );
-
-    this.highlightDropTarget(
-      pointer
-    );
+    this.dragVisual.setPosition(pointer.x, pointer.y);
+    this.highlightDropTarget(pointer);
   }
 
-  private finishDrag(
-    pointer: Phaser.Input.Pointer
-  ): void {
-    if (
-      !this.isDragging ||
-      !this.dragItem
-    ) {
+  private finishDrag(pointer: Phaser.Input.Pointer): void {
+    if (!this.isDragging || !this.dragItem) {
       return;
     }
 
-    const source =
-      this.dragSource;
-
-    const sourceIndex =
-      this.dragIndex;
+    const source = this.dragSource;
+    const sourceIndex = this.dragIndex;
 
     let success = false;
 
-    if (
-      source === "inventory"
-    ) {
-      const targetEquipment =
-        this.getEquipmentSlotAt(
-          pointer.x,
-          pointer.y
-        );
+    if (source === "inventory") {
+      const targetEquipment = this.getEquipmentSlotAt(
+        pointer.x,
+        pointer.y
+      );
 
-      if (
-        targetEquipment !== -1
-      ) {
-        success =
-          this.equipFromInventory(
-            sourceIndex,
-            targetEquipment
-          );
+      if (targetEquipment !== -1) {
+        success = this.equipFromInventory(
+          sourceIndex,
+          targetEquipment
+        );
       }
     }
 
-    if (
-      source === "equipment"
-    ) {
-      const targetInventory =
-        this.getInventorySlotAt(
-          pointer.x,
-          pointer.y
-        );
+    if (source === "equipment") {
+      const targetInventory = this.getInventorySlotAt(
+        pointer.x,
+        pointer.y
+      );
 
-      if (
-        targetInventory !== -1
-      ) {
-        success =
-          this.unequipToInventory(
-            sourceIndex,
-            targetInventory
-          );
+      if (targetInventory !== -1) {
+        success = this.unequipToInventory(
+          sourceIndex,
+          targetInventory
+        );
       }
     }
 
@@ -1688,69 +1397,54 @@ export class InventorySystem {
     this.updateAllEquipmentSlots();
     this.updateAllInventorySlots();
 
-    if (!success) {
-      if (
-        source === "inventory"
-      ) {
-        this.selectSlot(
-          sourceIndex
-        );
-      }
+    if (!success && source === "inventory") {
+      this.selectSlot(sourceIndex);
     }
   }
+
+  // ========================================
+  // EQUIPAR / DESEQUIPAR
+  // ========================================
 
   private equipFromInventory(
     inventoryIndex: number,
     equipmentIndex: number
   ): boolean {
-    const inventorySlot =
-      this.slots[
-        inventoryIndex
-      ];
+    const inventorySlot = this.slots[inventoryIndex];
 
-    if (!inventorySlot.item) {
+    if (!inventorySlot || !inventorySlot.item) {
       return false;
     }
 
-    const item =
-      inventorySlot.item;
-
-    const equipmentSlot =
-      this.equipmentSlots[
-        equipmentIndex
-      ];
+    const item = inventorySlot.item;
+    const equipmentSlot = this.equipmentSlots[equipmentIndex];
 
     if (!equipmentSlot) {
       return false;
     }
 
-    if (
-      !this.canEquipItemInSlot(
-        item,
-        equipmentSlot.id
-      )
-    ) {
+    if (!this.canEquipItemInSlot(item, equipmentSlot.id)) {
       return false;
     }
 
-    if (
-      equipmentSlot.item
-    ) {
+    if (equipmentSlot.item) {
       return false;
     }
 
-    equipmentSlot.item =
-      item;
+    equipmentSlot.item = item;
 
+    // Sincroniza a arma principal com o Player.
     if (
-      inventorySlot.quantity >
-      1
+      equipmentSlot.id === "weapon" &&
+      item instanceof Weapon
     ) {
+      this.player.equipWeapon(item);
+    }
+
+    if (inventorySlot.quantity > 1) {
       inventorySlot.quantity--;
     } else {
-      this.slots[
-        inventoryIndex
-      ] = {
+      this.slots[inventoryIndex] = {
         item: null,
         quantity: 0,
       };
@@ -1766,30 +1460,31 @@ export class InventorySystem {
     equipmentIndex: number,
     inventoryIndex: number
   ): boolean {
-    const equipmentSlot =
-      this.equipmentSlots[
-        equipmentIndex
-      ];
+    const equipmentSlot = this.equipmentSlots[equipmentIndex];
 
-    if (!equipmentSlot.item) {
+    if (!equipmentSlot || !equipmentSlot.item) {
       return false;
     }
 
-    const inventorySlot =
-      this.slots[
-        inventoryIndex
-      ];
+    const inventorySlot = this.slots[inventoryIndex];
 
-    if (inventorySlot.item) {
+    if (!inventorySlot || inventorySlot.item) {
       return false;
     }
 
-    inventorySlot.item =
-      equipmentSlot.item;
+    const item = equipmentSlot.item;
 
+    inventorySlot.item = item;
     inventorySlot.quantity = 1;
 
     equipmentSlot.item = null;
+
+    if (
+      equipmentSlot.id === "weapon" &&
+      item instanceof Weapon
+    ) {
+      this.player.unequipWeapon();
+    }
 
     this.updatePlayerEquipmentBonuses();
 
@@ -1820,9 +1515,7 @@ export class InventorySystem {
           return;
         }
 
-        const name = this.normalizeAttributeName(
-          attribute.name
-        );
+        const name = this.normalizeAttributeName(attribute.name);
 
         switch (name) {
           case "forca":
@@ -1854,16 +1547,17 @@ export class InventorySystem {
 
     this.player.setEquipmentBonuses(bonuses);
 
-    const shoulderArmor =
-      this.equipmentSlots.find(
-        (slot) => slot.id === "shoulder"
-      )?.item;
+    // Envia todos os equipamentos de armadura ao Player.
+    const equippedArmors = this.equipmentSlots
+      .filter(
+        (slot) =>
+          slot.item instanceof Armor &&
+          slot.id !== "weapon" &&
+          slot.id !== "offhand"
+      )
+      .map((slot) => slot.item as Armor);
 
-    this.player.setEquippedArmorVisual(
-      shoulderArmor instanceof Armor
-        ? shoulderArmor
-        : null
-    );
+    this.player.setEquippedEquipmentVisuals(equippedArmors);
 
     this.updatePlayerStatus();
   }
@@ -1885,33 +1579,17 @@ export class InventorySystem {
     }
 
     if (item instanceof Weapon) {
-      return (
-        slotId === "weapon" ||
-        slotId === "offhand"
-      );
+      return slotId === "weapon" || slotId === "offhand";
     }
 
     return false;
   }
 
-  private getEquipmentSlotAt(
-    x: number,
-    y: number
-  ): number {
-    for (
-      let i = 0;
-      i <
-      this.equipmentSlots.length;
-      i++
-    ) {
-      const bounds =
-        this.equipmentSlots[
-          i
-        ].background.getBounds();
+  private getEquipmentSlotAt(x: number, y: number): number {
+    for (let i = 0; i < this.equipmentSlots.length; i++) {
+      const bounds = this.equipmentSlots[i].background.getBounds();
 
-      if (
-        bounds.contains(x, y)
-      ) {
+      if (bounds.contains(x, y)) {
         return i;
       }
     }
@@ -1919,31 +1597,17 @@ export class InventorySystem {
     return -1;
   }
 
-  private getInventorySlotAt(
-    x: number,
-    y: number
-  ): number {
-    for (
-      let i = 0;
-      i <
-      this.inventorySlotBackgrounds.length;
-      i++
-    ) {
-      const background =
-        this.inventorySlotBackgrounds[
-          i
-        ];
+  private getInventorySlotAt(x: number, y: number): number {
+    for (let i = 0; i < this.inventorySlotBackgrounds.length; i++) {
+      const background = this.inventorySlotBackgrounds[i];
 
       if (!background.visible) {
         continue;
       }
 
-      const bounds =
-        background.getBounds();
+      const bounds = background.getBounds();
 
-      if (
-        bounds.contains(x, y)
-      ) {
+      if (bounds.contains(x, y)) {
         return i;
       }
     }
@@ -1951,114 +1615,64 @@ export class InventorySystem {
     return -1;
   }
 
-  private highlightDropTarget(
-    pointer: Phaser.Input.Pointer
-  ): void {
+  private highlightDropTarget(pointer: Phaser.Input.Pointer): void {
     this.clearDropHighlights();
 
     if (!this.dragItem) {
       return;
     }
 
-    if (
-      this.dragSource ===
-      "inventory"
-    ) {
-      const equipmentIndex =
-        this.getEquipmentSlotAt(
-          pointer.x,
-          pointer.y
-        );
+    if (this.dragSource === "inventory") {
+      const equipmentIndex = this.getEquipmentSlotAt(
+        pointer.x,
+        pointer.y
+      );
 
-      if (
-        equipmentIndex !== -1
-      ) {
-        const slot =
-          this.equipmentSlots[
-            equipmentIndex
-          ];
+      if (equipmentIndex !== -1) {
+        const slot = this.equipmentSlots[equipmentIndex];
 
         if (
           !slot.item &&
-          this.canEquipItemInSlot(
-            this.dragItem,
-            slot.id
-          )
+          this.canEquipItemInSlot(this.dragItem, slot.id)
         ) {
-          slot.background.setStrokeStyle(
-            3,
-            0x55d66b,
-            1
-          );
+          slot.background.setStrokeStyle(3, 0x55d66b, 1);
         } else {
-          slot.background.setStrokeStyle(
-            3,
-            0xd64d4d,
-            1
-          );
+          slot.background.setStrokeStyle(3, 0xd64d4d, 1);
         }
       }
     }
 
-    if (
-      this.dragSource ===
-      "equipment"
-    ) {
-      const inventoryIndex =
-        this.getInventorySlotAt(
-          pointer.x,
-          pointer.y
-        );
+    if (this.dragSource === "equipment") {
+      const inventoryIndex = this.getInventorySlotAt(
+        pointer.x,
+        pointer.y
+      );
 
-      if (
-        inventoryIndex !== -1
-      ) {
+      if (inventoryIndex !== -1) {
         const background =
-          this.inventorySlotBackgrounds[
-            inventoryIndex
-          ];
+          this.inventorySlotBackgrounds[inventoryIndex];
 
-        if (
-          !this.slots[
-            inventoryIndex
-          ].item
-        ) {
-          background.setStrokeStyle(
-            3,
-            0x55d66b,
-            1
-          );
+        if (!this.slots[inventoryIndex].item) {
+          background.setStrokeStyle(3, 0x55d66b, 1);
         } else {
-          background.setStrokeStyle(
-            3,
-            0xd64d4d,
-            1
-          );
+          background.setStrokeStyle(3, 0xd64d4d, 1);
         }
       }
     }
   }
 
   private clearDropHighlights(): void {
-    this.equipmentSlots.forEach(
-      (slot) => {
-        if (slot.item) {
-          slot.background.setStrokeStyle(
-            1,
-            this.getRarityColorNumber(
-              slot.item.rarity
-            ),
-            1
-          );
-        } else {
-          slot.background.setStrokeStyle(
-            1,
-            0x555c67,
-            1
-          );
-        }
+    this.equipmentSlots.forEach((slot) => {
+      if (slot.item) {
+        slot.background.setStrokeStyle(
+          1,
+          this.getRarityColorNumber(slot.item.rarity),
+          1
+        );
+      } else {
+        slot.background.setStrokeStyle(1, 0x555c67, 1);
       }
-    );
+    });
 
     this.updateSelectionVisuals();
   }
@@ -2071,99 +1685,87 @@ export class InventorySystem {
   }
 
   // ========================================
-  // ATUALIZA EQUIPAMENTOS
+  // ATUALIZA EQUIPAMENTOS E ÍCONES
   // ========================================
 
   private updateAllEquipmentSlots(): void {
-    this.equipmentSlots.forEach(
-      (slot) => {
-        if (slot.icon) {
-          slot.icon.destroy();
-          slot.icon = null;
-        }
-
-        if (!slot.item) {
-          slot.label.setColor(
-            "#737a85"
-          );
-
-          slot.background.setStrokeStyle(
-            1,
-            0x555c67,
-            1
-          );
-
-          return;
-        }
-
-        slot.label.setColor(
-          "#bfc4cc"
-        );
-
-        slot.background.setStrokeStyle(
-          1,
-          this.getRarityColorNumber(
-            slot.item.rarity
-          ),
-          1
-        );
-
-        const textureKey =
-          this.getTextureKey(
-            slot.item
-          );
-
-        if (
-          textureKey &&
-          this.scene.textures.exists(
-            textureKey
-          )
-        ) {
-          const icon =
-            this.scene.add.image(
-              slot.background.x,
-              slot.background.y,
-              textureKey
-            );
-
-          const scale =
-            Math.min(
-              34 / icon.width,
-              34 / icon.height
-            );
-
-          icon.setScale(scale);
-          icon.setDepth(10002);
-
-          icon.setInteractive({
-            useHandCursor: true,
-          });
-
-          const equipmentIndex =
-            this.equipmentSlots.indexOf(
-              slot
-            );
-
-          icon.on(
-            "pointerdown",
-            (
-              pointer: Phaser.Input.Pointer
-            ) => {
-              this.startEquipmentDrag(
-                equipmentIndex,
-                pointer
-              );
-            }
-          );
-
-          slot.icon = icon;
-
-          this.uiContainer.add(
-            icon
-          );
-        }
+    this.equipmentSlots.forEach((slot) => {
+      if (slot.icon) {
+        slot.icon.destroy();
+        slot.icon = null;
       }
-    );
+
+      slot.customIcon.clear();
+      slot.customIcon.setVisible(false);
+
+      if (!slot.item) {
+        slot.label.setColor("#737a85");
+
+        slot.background.setStrokeStyle(1, 0x555c67, 1);
+
+        return;
+      }
+
+      slot.label.setColor("#bfc4cc");
+
+      slot.background.setStrokeStyle(
+        1,
+        this.getRarityColorNumber(slot.item.rarity),
+        1
+      );
+
+      // Acessório de subclasse: utiliza o desenho próprio.
+      const accessory = this.findAccessoryByItemId(slot.item.id);
+
+      if (accessory) {
+        drawSubclassAccessoryFront(
+          slot.customIcon,
+          accessory.subclassId,
+          slot.background.x - 17,
+          slot.background.y - 17,
+          34
+        );
+
+        slot.customIcon.setVisible(true);
+        return;
+      }
+
+      // Itens que possuem textura continuam usando suas imagens.
+      const textureKey = this.getTextureKey(slot.item);
+
+      if (
+        textureKey &&
+        this.scene.textures.exists(textureKey)
+      ) {
+        const icon = this.scene.add.image(
+          slot.background.x,
+          slot.background.y,
+          textureKey
+        );
+
+        const scale = Math.min(
+          34 / icon.width,
+          34 / icon.height
+        );
+
+        icon.setScale(scale);
+        icon.setDepth(10002);
+
+        icon.setInteractive({ useHandCursor: true });
+
+        const equipmentIndex = this.equipmentSlots.indexOf(slot);
+
+        icon.on(
+          "pointerdown",
+          (pointer: Phaser.Input.Pointer) => {
+            this.startEquipmentDrag(equipmentIndex, pointer);
+          }
+        );
+
+        slot.icon = icon;
+        this.uiContainer.add(icon);
+      }
+    });
   }
 
   private updatePlayerStatus(): void {
@@ -2178,6 +1780,7 @@ export class InventorySystem {
     const agility = this.player.getAgility();
     const luck = this.player.getLuck();
     const intelligence = this.player.getIntelligence();
+
     const movementSpeed = Math.floor(
       200 * (1 + agility * 0.03)
     );
@@ -2186,6 +1789,7 @@ export class InventorySystem {
       this.statsTexts[7].setText(
         `${Math.ceil(health)} / ${Math.ceil(maxHealth)}`
       );
+
       this.statsTexts[9].setText(`${attack}`);
       this.statsTexts[11].setText(`${defense}`);
       this.statsTexts[13].setText(`${movementSpeed}`);
@@ -2198,18 +1802,23 @@ export class InventorySystem {
       this.attributeTexts[1].setText(
         `${this.player.getStrength()}`
       );
+
       this.attributeTexts[4].setText(
         `${this.player.getVitality()}`
       );
+
       this.attributeTexts[7].setText(
         `${this.player.getDefense()}`
       );
+
       this.attributeTexts[10].setText(
         `${this.player.getAgility()}`
       );
+
       this.attributeTexts[13].setText(
         `${this.player.getLuck()}`
       );
+
       this.attributeTexts[16].setText(
         `${this.player.getIntelligence()}`
       );
@@ -2218,6 +1827,7 @@ export class InventorySystem {
 
   private getItemAttributeLines(item: Item): string[] {
     const lines: string[] = [];
+
     const hasDefenseAttribute = item.attributes.some(
       (attribute) =>
         typeof attribute.value === "number" &&
@@ -2229,9 +1839,7 @@ export class InventorySystem {
         return;
       }
 
-      lines.push(
-        `${attribute.name} +${attribute.value}`
-      );
+      lines.push(`${attribute.name} +${attribute.value}`);
     });
 
     if (
@@ -2239,9 +1847,7 @@ export class InventorySystem {
       item.defense !== 0 &&
       !hasDefenseAttribute
     ) {
-      lines.push(
-        `Defesa +${item.defense}`
-      );
+      lines.push(`Defesa +${item.defense}`);
     }
 
     return lines;
@@ -2251,29 +1857,19 @@ export class InventorySystem {
   // SELEÇÃO
   // ========================================
 
-  private selectSlot(
-    index: number
-  ): void {
-    if (
-      index < 0 ||
-      index >= this.slots.length
-    ) {
+  private selectSlot(index: number): void {
+    if (index < 0 || index >= this.slots.length) {
       return;
     }
 
-    const slot =
-      this.slots[index];
+    const slot = this.slots[index];
 
     if (!slot.item) {
       this.clearSelection();
       return;
     }
 
-    if (
-      !this.itemMatchesCategory(
-        slot.item
-      )
-    ) {
+    if (!this.itemMatchesCategory(slot.item)) {
       return;
     }
 
@@ -2281,89 +1877,51 @@ export class InventorySystem {
 
     this.updateSelectionVisuals();
 
-    this.itemNameText.setText(
-      slot.item.name
-    );
+    this.itemNameText.setText(slot.item.name);
 
     this.itemDescriptionText.setText(
-      slot.item.description ||
-        "Sem descrição."
+      slot.item.description || "Sem descrição."
     );
 
-    this.updateItemAttributesPopup(
-      index,
-      slot.item
-    );
+    this.updateItemAttributesPopup(index, slot.item);
 
     this.itemRarityText.setText(
-      this.getRarityName(
-        slot.item.rarity
-      )
+      this.getRarityName(slot.item.rarity)
     );
 
     this.itemRarityText.setColor(
-      this.getRarityColor(
-        slot.item.rarity
-      )
+      this.getRarityColor(slot.item.rarity)
     );
 
-    this.itemQuantityText.setText(
-      `x${slot.quantity}`
-    );
+    this.itemQuantityText.setText(`x${slot.quantity}`);
 
     this.itemNameText.setColor(
-      this.getRarityColor(
-        slot.item.rarity
-      )
+      this.getRarityColor(slot.item.rarity)
     );
   }
 
   private updateSelectionVisuals(): void {
-    this.inventorySlotBackgrounds.forEach(
-      (
-        background,
-        index
-      ) => {
-        const slot =
-          this.slots[index];
+    this.inventorySlotBackgrounds.forEach((background, index) => {
+      const slot = this.slots[index];
 
-        if (
-          index ===
-            this.selectedSlot &&
-          slot.item
-        ) {
-          background.setStrokeStyle(
-            2,
-            0xd6b35a,
-            1
-          );
-        } else if (
-          slot.item
-        ) {
-          background.setStrokeStyle(
-            1,
-            this.getRarityColorNumber(
-              slot.item.rarity
-            ),
-            1
-          );
-        } else {
-          background.setStrokeStyle(
-            1,
-            0x454b55,
-            1
-          );
-        }
+      if (index === this.selectedSlot && slot.item) {
+        background.setStrokeStyle(2, 0xd6b35a, 1);
+      } else if (slot.item) {
+        background.setStrokeStyle(
+          1,
+          this.getRarityColorNumber(slot.item.rarity),
+          1
+        );
+      } else {
+        background.setStrokeStyle(1, 0x454b55, 1);
       }
-    );
+    });
   }
 
   private clearSelection(): void {
     this.selectedSlot = -1;
 
-    this.itemNameText.setText(
-      "Nenhum item selecionado"
-    );
+    this.itemNameText.setText("Nenhum item selecionado");
 
     this.itemDescriptionText.setText(
       "Selecione um item para ver seus detalhes."
@@ -2373,7 +1931,6 @@ export class InventorySystem {
     this.itemQuantityText.setText("");
 
     this.hideItemAttributesPopup();
-
     this.updateSelectionVisuals();
   }
 
@@ -2381,16 +1938,14 @@ export class InventorySystem {
     index: number,
     item: Item
   ): void {
-    const attributeLines =
-      this.getItemAttributeLines(item);
+    const attributeLines = this.getItemAttributeLines(item);
 
     if (attributeLines.length === 0) {
       this.hideItemAttributesPopup();
       return;
     }
 
-    const slotBackground =
-      this.inventorySlotBackgrounds[index];
+    const slotBackground = this.inventorySlotBackgrounds[index];
 
     if (!slotBackground) {
       this.hideItemAttributesPopup();
@@ -2402,86 +1957,47 @@ export class InventorySystem {
     const slotSize = 43;
     const margin = 6;
 
-    // O painel acompanha o item selecionado e fica
-    // para o lado dele, sem sair do painel do inventário.
-    // Na última coluna, ele aparece à esquerda.
     const column = index % 6;
     const placeRight = column < 5;
 
-    let popupX =
-      placeRight
-        ? slotBackground.x +
-          slotSize / 2 +
-          margin +
-          popupWidth / 2
-        : slotBackground.x -
-          slotSize / 2 -
-          margin -
-          popupWidth / 2;
+    let popupX = placeRight
+      ? slotBackground.x +
+        slotSize / 2 +
+        margin +
+        popupWidth / 2
+      : slotBackground.x -
+        slotSize / 2 -
+        margin -
+        popupWidth / 2;
 
     const panelWidth = 330;
     const panelHeight = 510;
 
-    const panelLeft =
-      this.inventoryPanel.x -
-      panelWidth / 2;
-
-    const panelRight =
-      this.inventoryPanel.x +
-      panelWidth / 2;
-
-    const panelTop =
-      this.inventoryPanel.y -
-      panelHeight / 2;
-
-    const panelBottom =
-      this.inventoryPanel.y +
-      panelHeight / 2;
+    const panelLeft = this.inventoryPanel.x - panelWidth / 2;
+    const panelRight = this.inventoryPanel.x + panelWidth / 2;
+    const panelTop = this.inventoryPanel.y - panelHeight / 2;
+    const panelBottom = this.inventoryPanel.y + panelHeight / 2;
 
     popupX = Phaser.Math.Clamp(
       popupX,
-      panelLeft +
-        margin +
-        popupWidth / 2,
-      panelRight -
-        margin -
-        popupWidth / 2
+      panelLeft + margin + popupWidth / 2,
+      panelRight - margin - popupWidth / 2
     );
 
     const popupY = Phaser.Math.Clamp(
       slotBackground.y,
-      panelTop +
-        margin +
-        popupHeight / 2,
-      panelBottom -
-        margin -
-        popupHeight / 2
+      panelTop + margin + popupHeight / 2,
+      panelBottom - margin - popupHeight / 2
     );
 
-    this.itemAttributesPanel.setPosition(
-      popupX,
-      popupY
-    );
+    this.itemAttributesPanel.setPosition(popupX, popupY);
+    this.itemAttributesTitle.setPosition(popupX, popupY - 27);
+    this.itemAttributesText.setPosition(popupX - 47, popupY - 12);
 
-    this.itemAttributesTitle.setPosition(
-      popupX,
-      popupY - 27
-    );
-
-    this.itemAttributesText.setPosition(
-      popupX - 47,
-      popupY - 12
-    );
-
-    this.itemAttributesText.setText(
-      attributeLines.join("\n")
-    );
-
-    const rarityColor =
-      this.getRarityColor(item.rarity);
+    this.itemAttributesText.setText(attributeLines.join("\n"));
 
     this.itemAttributesTitle.setColor(
-      rarityColor
+      this.getRarityColor(item.rarity)
     );
 
     this.itemAttributesPanel.setVisible(true);
@@ -2500,87 +2016,39 @@ export class InventorySystem {
   // CATEGORIAS
   // ========================================
 
-  private setCategory(
-    category: InventoryCategory
-  ): void {
-    this.currentCategory =
-      category;
+  private setCategory(category: InventoryCategory): void {
+    this.currentCategory = category;
 
-    this.categoryButtons.forEach(
-      (
-        button,
-        index
-      ) => {
-        const buttonCategory =
-          this.getCategoryByIndex(
-            index
-          );
+    this.categoryButtons.forEach((button, index) => {
+      const buttonCategory = this.getCategoryByIndex(index);
 
-        if (
-          buttonCategory ===
-          category
-        ) {
-          button.setFillStyle(
-            0x353b45
-          );
-
-          button.setStrokeStyle(
-            2,
-            0x8a929d,
-            1
-          );
-
-          this.categoryTexts[
-            index
-          ].setColor(
-            "#ffffff"
-          );
-        } else {
-          button.setFillStyle(
-            0x20252d
-          );
-
-          button.setStrokeStyle(
-            1,
-            0x555c67,
-            1
-          );
-
-          this.categoryTexts[
-            index
-          ].setColor(
-            "#858c96"
-          );
-        }
+      if (buttonCategory === category) {
+        button.setFillStyle(0x353b45);
+        button.setStrokeStyle(2, 0x8a929d, 1);
+        this.categoryTexts[index].setColor("#ffffff");
+      } else {
+        button.setFillStyle(0x20252d);
+        button.setStrokeStyle(1, 0x555c67, 1);
+        this.categoryTexts[index].setColor("#858c96");
       }
-    );
+    });
 
     this.updateAllInventorySlots();
 
-    if (
-      this.selectedSlot !== -1
-    ) {
-      const selected =
-        this.slots[
-          this.selectedSlot
-        ];
+    if (this.selectedSlot !== -1) {
+      const selected = this.slots[this.selectedSlot];
 
       if (
         !selected.item ||
-        !this.itemMatchesCategory(
-          selected.item
-        )
+        !this.itemMatchesCategory(selected.item)
       ) {
         this.clearSelection();
       }
     }
   }
 
-  private getCategoryByIndex(
-    index: number
-  ): InventoryCategory {
-    const categories:
-      InventoryCategory[] = [
+  private getCategoryByIndex(index: number): InventoryCategory {
+    const categories: InventoryCategory[] = [
       "all",
       "weapon",
       "armor",
@@ -2589,129 +2057,79 @@ export class InventorySystem {
       "quest",
     ];
 
-    return (
-      categories[index] ??
-      "all"
-    );
+    return categories[index] ?? "all";
   }
 
-  private itemMatchesCategory(
-    item: Item
-  ): boolean {
-    if (
-      this.currentCategory ===
-      "all"
-    ) {
+  private itemMatchesCategory(item: Item): boolean {
+    if (this.currentCategory === "all") {
       return true;
     }
 
-    return (
-      item.type ===
-      this.currentCategory
-    );
+    return item.type === this.currentCategory;
   }
 
   // ========================================
   // ITENS
   // ========================================
 
-  addItem(
-    item: Item,
-    quantity: number = 1
-  ): boolean {
-    for (
-      let i = 0;
-      i < this.slots.length;
-      i++
-    ) {
-      const slot =
-        this.slots[i];
+  addItem(item: Item, quantity: number = 1): boolean {
+    if (quantity <= 0) {
+      return false;
+    }
 
-      if (
-        slot.item &&
-        slot.item.id ===
-          item.id
-      ) {
-        slot.quantity +=
-          quantity;
+    for (let i = 0; i < this.slots.length; i++) {
+      const slot = this.slots[i];
 
+      if (slot.item && slot.item.id === item.id) {
+        slot.quantity += quantity;
         this.updateSlot(i);
-
         return true;
       }
     }
 
-    for (
-      let i = 0;
-      i < this.slots.length;
-      i++
-    ) {
-      if (
-        !this.slots[i].item
-      ) {
+    for (let i = 0; i < this.slots.length; i++) {
+      if (!this.slots[i].item) {
         this.slots[i] = {
           item,
           quantity,
         };
 
         this.updateSlot(i);
-
         return true;
       }
     }
 
-    console.log(
-      "Inventário cheio!"
-    );
-
+    console.log("Inventário cheio!");
     return false;
   }
 
-  removeItem(
-    itemId: string,
-    quantity: number = 1
-  ): boolean {
-    for (
-      let i = 0;
-      i < this.slots.length;
-      i++
-    ) {
-      const slot =
-        this.slots[i];
+  removeItem(itemId: string, quantity: number = 1): boolean {
+    if (quantity <= 0) {
+      return false;
+    }
 
-      if (
-        slot.item &&
-        slot.item.id ===
-          itemId
-      ) {
-        if (
-          slot.quantity <
-          quantity
-        ) {
+    for (let i = 0; i < this.slots.length; i++) {
+      const slot = this.slots[i];
+
+      if (slot.item && slot.item.id === itemId) {
+        if (slot.quantity < quantity) {
           return false;
         }
 
-        slot.quantity -=
-          quantity;
+        slot.quantity -= quantity;
 
-        if (
-          slot.quantity <= 0
-        ) {
+        if (slot.quantity <= 0) {
           this.slots[i] = {
             item: null,
             quantity: 0,
           };
 
-          if (
-            this.selectedSlot ===
-            i
-          ) {
+          if (this.selectedSlot === i) {
             this.clearSelection();
           }
         }
 
         this.updateSlot(i);
-
         return true;
       }
     }
@@ -2719,26 +2137,15 @@ export class InventorySystem {
     return false;
   }
 
-  private updateSlot(
-    index: number
-  ): void {
-    const slot =
-      this.slots[index];
+  private updateSlot(index: number): void {
+    const slot = this.slots[index];
+    const background = this.inventorySlotBackgrounds[index];
+    const icon = this.inventorySlotIcons[index];
+    const customIcon = this.inventorySlotCustomIcons[index];
+    const quantityText = this.inventorySlotTexts[index];
 
-    const background =
-      this.inventorySlotBackgrounds[
-        index
-      ];
-
-    const icon =
-      this.inventorySlotIcons[
-        index
-      ];
-
-    const quantityText =
-      this.inventorySlotTexts[
-        index
-      ];
+    customIcon.clear();
+    customIcon.setVisible(false);
 
     if (!slot.item) {
       background.setVisible(true);
@@ -2750,20 +2157,11 @@ export class InventorySystem {
       quantityText.setText("");
       quantityText.setVisible(false);
 
-      background.setStrokeStyle(
-        1,
-        0x454b55,
-        1
-      );
-
+      background.setStrokeStyle(1, 0x454b55, 1);
       return;
     }
 
-    if (
-      !this.itemMatchesCategory(
-        slot.item
-      )
-    ) {
+    if (!this.itemMatchesCategory(slot.item)) {
       background.setVisible(false);
 
       if (icon) {
@@ -2772,83 +2170,74 @@ export class InventorySystem {
 
       quantityText.setText("");
       quantityText.setVisible(false);
-
       return;
     }
 
     background.setVisible(true);
 
-    if (
-      this.selectedSlot ===
-      index
-    ) {
-      background.setStrokeStyle(
-        2,
-        0xd6b35a,
-        1
-      );
+    if (this.selectedSlot === index) {
+      background.setStrokeStyle(2, 0xd6b35a, 1);
     } else {
       background.setStrokeStyle(
         1,
-        this.getRarityColorNumber(
-          slot.item.rarity
-        ),
+        this.getRarityColorNumber(slot.item.rarity),
         1
       );
     }
 
-    const textureKey =
-      this.getTextureKey(
-        slot.item
+    // Acessórios de subclasse usam desenhos próprios.
+    const accessory = this.findAccessoryByItemId(slot.item.id);
+
+    if (accessory) {
+      if (icon) {
+        icon.setVisible(false);
+      }
+
+      drawSubclassAccessoryFront(
+        customIcon,
+        accessory.subclassId,
+        background.x - 13,
+        background.y - 13,
+        26
       );
 
-    if (
-      icon &&
-      textureKey &&
-      this.scene.textures.exists(
-        textureKey
-      )
-    ) {
-      icon.setTexture(
-        textureKey
-      );
+      customIcon.setVisible(true);
+    } else {
+      const textureKey = this.getTextureKey(slot.item);
 
-      const scale =
-        Math.min(
+      if (
+        icon &&
+        textureKey &&
+        this.scene.textures.exists(textureKey)
+      ) {
+        icon.setTexture(textureKey);
+
+        const scale = Math.min(
           29 / icon.width,
           29 / icon.height
         );
 
-      icon.setScale(scale);
-      icon.setVisible(true);
-    } else if (icon) {
-      icon.setVisible(false);
+        icon.setScale(scale);
+        icon.setVisible(true);
+      } else if (icon) {
+        icon.setVisible(false);
+      }
     }
 
     quantityText.setText(
-      slot.quantity > 1
-        ? `x${slot.quantity}`
-        : ""
+      slot.quantity > 1 ? `x${slot.quantity}` : ""
     );
 
-    quantityText.setVisible(
-      slot.quantity > 1
-    );
+    quantityText.setVisible(slot.quantity > 1);
   }
 
   private updateAllInventorySlots(): void {
-    for (
-      let i = 0;
-      i < this.slotCount;
-      i++
-    ) {
+    for (let i = 0; i < this.slotCount; i++) {
       this.updateSlot(i);
     }
   }
 
-  private getTextureKey(
-    item: Item
-  ): string | null {
+  private getTextureKey(item: Item): string | null {
     switch (item.id) {
       case "slime_gel":
         return "slime_gel";
@@ -2868,9 +2257,7 @@ export class InventorySystem {
   // RARIDADE
   // ========================================
 
-  private getRarityName(
-    rarity: ItemRarity
-  ): string {
+  private getRarityName(rarity: ItemRarity): string {
     switch (rarity) {
       case "common":
         return "COMUM";
@@ -2892,9 +2279,7 @@ export class InventorySystem {
     }
   }
 
-  private getRarityColor(
-    rarity: ItemRarity
-  ): string {
+  private getRarityColor(rarity: ItemRarity): string {
     switch (rarity) {
       case "common":
         return "#bfc3c8";
@@ -2916,9 +2301,7 @@ export class InventorySystem {
     }
   }
 
-  private getRarityColorNumber(
-    rarity: ItemRarity
-  ): number {
+  private getRarityColorNumber(rarity: ItemRarity): number {
     switch (rarity) {
       case "common":
         return 0xbfc3c8;
@@ -2944,102 +2327,63 @@ export class InventorySystem {
   // INFORMAÇÕES
   // ========================================
 
-  setClass(
-    characterClass: string
-  ): void {
-    this.characterClass =
-      characterClass;
+  setClass(characterClass: string): void {
+    this.characterClass = characterClass;
 
     this.updateCharacterInfo();
     this.updatePlayerStatus();
   }
 
-  setSubclass(
-    subclass: string
-  ): void {
-    this.characterSubclass =
-      subclass;
-
+  setSubclass(subclass: string): void {
+    this.characterSubclass = subclass;
     this.updateCharacterInfo();
   }
 
-  setProfession(
-    profession: string
-  ): void {
-    this.characterProfession =
-      profession;
-
+  setProfession(profession: string): void {
+    this.characterProfession = profession;
     this.updateCharacterInfo();
   }
 
   private updateCharacterInfo(): void {
-    if (
-      this.statsTexts.length < 6
-    ) {
+    if (this.statsTexts.length < 6) {
       return;
     }
 
-    this.statsTexts[1].setText(
-      this.characterClass
-    );
-
-    this.statsTexts[3].setText(
-      this.characterSubclass
-    );
-
-    this.statsTexts[5].setText(
-      this.characterProfession
-    );
+    this.statsTexts[1].setText(this.characterClass);
+    this.statsTexts[3].setText(this.characterSubclass);
+    this.statsTexts[5].setText(this.characterProfession);
   }
 
-  setHealth(
-    health: number,
-    maxHealth: number
-  ): void {
-    const percentage =
-      Phaser.Math.Clamp(
-        health / maxHealth,
-        0,
-        1
-      );
+  setHealth(health: number, maxHealth: number): void {
+    const percentage = Phaser.Math.Clamp(
+      health / maxHealth,
+      0,
+      1
+    );
 
-    this.healthBar.width =
-      206 * percentage;
+    this.healthBar.width = 206 * percentage;
 
     this.healthBarText.setText(
-      `HP ${Math.ceil(
-        health
-      )} / ${Math.ceil(maxHealth)}`
+      `HP ${Math.ceil(health)} / ${Math.ceil(maxHealth)}`
     );
   }
 
-  setStamina(
-    stamina: number,
-    maxStamina: number
-  ): void {
-    const percentage =
-      Phaser.Math.Clamp(
-        stamina / maxStamina,
-        0,
-        1
-      );
+  setStamina(stamina: number, maxStamina: number): void {
+    const percentage = Phaser.Math.Clamp(
+      stamina / maxStamina,
+      0,
+      1
+    );
 
-    this.staminaBar.width =
-      206 * percentage;
+    this.staminaBar.width = 206 * percentage;
 
     this.staminaBarText.setText(
-      `STAMINA ${Math.ceil(
-        stamina
-      )} / ${Math.ceil(maxStamina)}`
+      `STAMINA ${Math.ceil(stamina)} / ${Math.ceil(maxStamina)}`
     );
   }
 
-  setLevel(
-    level: number
-  ): void {
-    this.levelText.setText(
-      `${level}\nNÍVEL`
-    );
+  setLevel(level: number): void {
+    this.levelText.setText(`${level}\nNÍVEL`);
   }
 
   // ========================================
@@ -3064,10 +2408,7 @@ export class InventorySystem {
     }
 
     this.inventoryOpen = true;
-
-    this.uiContainer.setVisible(
-      true
-    );
+    this.uiContainer.setVisible(true);
 
     this.updatePlayerEquipmentBonuses();
     this.updateAllEquipmentSlots();
@@ -3075,9 +2416,7 @@ export class InventorySystem {
 
     this.scene.physics.world.pause();
 
-    this.scene.events.emit(
-      "inventory-open"
-    );
+    this.scene.events.emit("inventory-open");
   }
 
   close(): void {
@@ -3091,15 +2430,11 @@ export class InventorySystem {
     this.dragItem = null;
     this.dragQuantity = 0;
 
-    this.uiContainer.setVisible(
-      false
-    );
+    this.uiContainer.setVisible(false);
 
     this.scene.physics.world.resume();
 
-    this.scene.events.emit(
-      "inventory-close"
-    );
+    this.scene.events.emit("inventory-close");
   }
 
   isOpen(): boolean {
@@ -3114,23 +2449,14 @@ export class InventorySystem {
     return this.slots;
   }
 
-  getItemCount(
-    itemId: string
-  ): number {
+  getItemCount(itemId: string): number {
     let total = 0;
 
-    this.slots.forEach(
-      (slot) => {
-        if (
-          slot.item &&
-          slot.item.id ===
-            itemId
-        ) {
-          total +=
-            slot.quantity;
-        }
+    this.slots.forEach((slot) => {
+      if (slot.item && slot.item.id === itemId) {
+        total += slot.quantity;
       }
-    );
+    });
 
     return total;
   }

@@ -94,6 +94,9 @@ const CATALOG_H = 650;
 
 const CATALOG_CLASSES_PER_PAGE = 10;
 
+// A lista de registro mostra 15 classes por página (3 colunas x 5 linhas).
+const REGISTRATION_CLASSES_PER_PAGE = 15;
+
 export class DialogueSystem {
   private scene: Phaser.Scene;
   private subclassSystem = new SubclassSystem();
@@ -146,6 +149,11 @@ export class DialogueSystem {
   private registrationClassButtons: Phaser.GameObjects.Rectangle[] = [];
   private registrationClassTexts: Phaser.GameObjects.Text[] = [];
   private registrationClassArrows: Phaser.GameObjects.Text[] = [];
+
+  private registrationClassPage = 0;
+  private registrationPreviousButton!: Phaser.GameObjects.Text;
+  private registrationNextButton!: Phaser.GameObjects.Text;
+  private registrationPageText!: Phaser.GameObjects.Text;
 
   private characterIcon!: Phaser.GameObjects.Graphics;
   private characterModificationText!: Phaser.GameObjects.Text;
@@ -751,6 +759,40 @@ export class DialogueSystem {
         fontStyle: "bold",
       }
     );
+
+    // Navegação da lista de classes (os controles ficam dentro do painel).
+    this.registrationPreviousButton = label(245, 638, "‹ ANTERIOR", {
+      fontSize: "11px",
+      color: "#aaaaaa",
+      fontStyle: "bold",
+    });
+    this.registrationPreviousButton.setInteractive({ useHandCursor: true });
+    this.registrationPreviousButton.on("pointerdown", () => {
+      if (!this.registrationMode || this.registrationClassPage <= 0) return;
+      this.registrationClassPage--;
+      this.createRegistrationClasses();
+    });
+
+    this.registrationPageText = label(325, 638, "1 / 1", {
+      fontSize: "11px",
+      color: "#dddddd",
+      fontStyle: "bold",
+    });
+
+    this.registrationNextButton = label(405, 638, "PRÓXIMA ›", {
+      fontSize: "11px",
+      color: "#aaaaaa",
+      fontStyle: "bold",
+    });
+    this.registrationNextButton.setInteractive({ useHandCursor: true });
+    this.registrationNextButton.on("pointerdown", () => {
+      const totalPages = Math.max(1, Math.ceil(
+        this.registrationClasses.length / REGISTRATION_CLASSES_PER_PAGE
+      ));
+      if (!this.registrationMode || this.registrationClassPage >= totalPages - 1) return;
+      this.registrationClassPage++;
+      this.createRegistrationClasses();
+    });
 
     // ========================================
     // PAINEL DIREITO
@@ -2608,6 +2650,7 @@ export class DialogueSystem {
 
     this.registrationClasses =
       classes;
+    this.registrationClassPage = 0;
 
     this.selectedRegistrationClass =
       null;
@@ -2666,176 +2709,83 @@ export class DialogueSystem {
 
     const startX = 37;
     const startY = 455;
-
     const buttonWidth = 184;
     const buttonHeight = 27;
-
     const gapX = 12;
     const gapY = 5;
 
-    this.registrationClasses.forEach(
-      (
-        characterClass,
-        index
-      ) => {
-        const column =
-          index % 3;
-
-        const row =
-          Math.floor(
-            index / 3
-          );
-
-        const x =
-          startX +
-          column *
-            (buttonWidth + gapX);
-
-        const y =
-          startY +
-          row *
-            (buttonHeight + gapY);
-
-        const button =
-          this.scene.add
-            .rectangle(
-              x,
-              y,
-              buttonWidth,
-              buttonHeight,
-              0x1b1b1b,
-              1
-            )
-            .setOrigin(0, 0)
-            .setStrokeStyle(
-              1,
-              0x4a4a4a
-            )
-            .setInteractive({
-              useHandCursor: true,
-            });
-
-        const text =
-          this.scene.add
-            .text(
-              x + 12,
-              y +
-                buttonHeight / 2,
-              characterClass.name,
-              {
-                fontSize: "10px",
-                color: "#ffffff",
-                fontStyle: "bold",
-              }
-            )
-            .setOrigin(0, 0.5);
-
-        const arrow =
-          this.scene.add
-            .text(
-              x +
-                buttonWidth -
-                14,
-              y +
-                buttonHeight / 2,
-              "›",
-              {
-                fontSize: "16px",
-                color: "#aaaaaa",
-              }
-            )
-            .setOrigin(0.5);
-
-        this.registrationContainer.add(
-          [
-            button,
-            text,
-            arrow,
-          ]
-        );
-
-        button.on(
-          "pointerover",
-          () => {
-            if (
-              this.selectedRegistrationClass
-                ?.id ===
-              characterClass.id
-            ) {
-              return;
-            }
-
-            button.setFillStyle(
-              0x292929
-            );
-
-            button.setStrokeStyle(
-              1,
-              0xd4a017
-            );
-
-            text.setColor(
-              "#ffd700"
-            );
-
-            arrow.setColor(
-              "#ffd700"
-            );
-          }
-        );
-
-        button.on(
-          "pointerout",
-          () => {
-            if (
-              this.selectedRegistrationClass
-                ?.id ===
-              characterClass.id
-            ) {
-              return;
-            }
-
-            button.setFillStyle(
-              0x1b1b1b
-            );
-
-            button.setStrokeStyle(
-              1,
-              0x4a4a4a
-            );
-
-            text.setColor(
-              "#ffffff"
-            );
-
-            arrow.setColor(
-              "#aaaaaa"
-            );
-          }
-        );
-
-        button.on(
-          "pointerdown",
-          () => {
-            this.selectRegistrationClass(
-              characterClass
-            );
-          }
-        );
-
-        this.registrationClassButtons.push(
-          button
-        );
-
-        this.registrationClassTexts.push(
-          text
-        );
-
-        this.registrationClassArrows.push(
-          arrow
-        );
-      }
+    const totalPages = Math.max(1, Math.ceil(
+      this.registrationClasses.length / REGISTRATION_CLASSES_PER_PAGE
+    ));
+    this.registrationClassPage = Phaser.Math.Clamp(
+      this.registrationClassPage, 0, totalPages - 1
     );
+    const firstIndex = this.registrationClassPage * REGISTRATION_CLASSES_PER_PAGE;
+    const visibleClasses = this.registrationClasses.slice(
+      firstIndex, firstIndex + REGISTRATION_CLASSES_PER_PAGE
+    );
+
+    this.registrationPageText.setText(`${this.registrationClassPage + 1} / ${totalPages}`);
+    this.registrationPreviousButton.setColor(this.registrationClassPage > 0 ? "#ffd700" : "#666666");
+    this.registrationNextButton.setColor(this.registrationClassPage < totalPages - 1 ? "#ffd700" : "#666666");
+
+    visibleClasses.forEach((characterClass, visibleIndex) => {
+      const column = visibleIndex % 3;
+      const row = Math.floor(visibleIndex / 3);
+      const x = startX + column * (buttonWidth + gapX);
+      const y = startY + row * (buttonHeight + gapY);
+
+      const button = this.scene.add.rectangle(
+        x, y, buttonWidth, buttonHeight, 0x1b1b1b, 1
+      )
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, 0x4a4a4a)
+        .setInteractive({ useHandCursor: true });
+
+      const text = this.scene.add.text(
+        x + 12, y + buttonHeight / 2, characterClass.name,
+        {
+          fontSize: "10px",
+          color: "#ffffff",
+          fontStyle: "bold",
+          fixedWidth: buttonWidth - 34,
+        }
+      ).setOrigin(0, 0.5);
+
+      const arrow = this.scene.add.text(
+        x + buttonWidth - 14, y + buttonHeight / 2, "›",
+        { fontSize: "16px", color: "#aaaaaa" }
+      ).setOrigin(0.5);
+
+      this.registrationContainer.add([button, text, arrow]);
+
+      button.on("pointerover", () => {
+        if (this.selectedRegistrationClass?.id === characterClass.id) return;
+        button.setFillStyle(0x292929);
+        button.setStrokeStyle(1, 0xd4a017);
+        text.setColor("#ffd700");
+        arrow.setColor("#ffd700");
+      });
+
+      button.on("pointerout", () => {
+        if (this.selectedRegistrationClass?.id === characterClass.id) return;
+        button.setFillStyle(0x1b1b1b);
+        button.setStrokeStyle(1, 0x4a4a4a);
+        text.setColor("#ffffff");
+        arrow.setColor("#aaaaaa");
+      });
+
+      button.on("pointerdown", () => this.selectRegistrationClass(characterClass));
+
+      this.registrationClassButtons.push(button);
+      this.registrationClassTexts.push(text);
+      this.registrationClassArrows.push(arrow);
+    });
+
+    // Mantém o destaque da classe selecionada ao trocar de página.
+    if (this.selectedRegistrationClass) {
+      this.selectRegistrationClass(this.selectedRegistrationClass);
+    }
   }
 
   // ========================================
@@ -2851,11 +2801,13 @@ export class DialogueSystem {
     for (
       let i = 0;
       i <
-      this.registrationClasses.length;
+      this.registrationClassButtons.length;
       i++
     ) {
       const currentClass =
-        this.registrationClasses[i];
+        this.registrationClasses[
+          this.registrationClassPage * REGISTRATION_CLASSES_PER_PAGE + i
+        ];
 
       const button =
         this.registrationClassButtons[i];
